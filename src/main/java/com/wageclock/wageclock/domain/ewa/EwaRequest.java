@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.worksession.WorkSession;
+import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @Table(name = "ewa_request")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-public class EwaRequest {
+public class EwaRequest extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,17 +35,12 @@ public class EwaRequest {
     @Column(nullable = false)
     private EwaRequestStatus status;
 
-    @Column(nullable = false)
-    private LocalDateTime createdAt;
-
     @Builder
     public EwaRequest(WorkSession workSession, BigDecimal requestedAmount, String idempotencyKey){
         this.workSession = workSession;
         this.requestedAmount = requestedAmount;
         this.idempotencyKey = idempotencyKey;
         this.status = EwaRequestStatus.PENDING;
-        this.createdAt = LocalDateTime.now();
-
     }
 
     public enum EwaRequestStatus{
