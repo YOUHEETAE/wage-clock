@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.worker;
 
+import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -10,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "workers")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Worker {
+public class Worker extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
