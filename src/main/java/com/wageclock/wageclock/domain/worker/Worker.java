@@ -1,15 +1,16 @@
-package com.wageclock.wageclock.domain.employer;
+package com.wageclock.wageclock.domain.worker;
 
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "employers")
+@Table(name = "workers")
 @Getter
-@NoArgsConstructor
-public class Employer {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Worker {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,11 +26,9 @@ public class Employer {
     private String password;
 
     @Builder
-    public Employer(String name, String email, String password) {
+    public Worker(String name, String email, String password) {
         this.name = name;
         this.email = email;
         this.password = password;
     }
-
-
 }
