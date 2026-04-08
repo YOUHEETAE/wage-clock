@@ -9,10 +9,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "ewa_request")
+@Table(name = "ewa_requests")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
 public class EwaRequest extends BaseEntity {

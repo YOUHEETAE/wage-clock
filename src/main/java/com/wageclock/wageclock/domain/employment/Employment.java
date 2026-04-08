@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "employment")
+@Table(name = "employments")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
 public class Employment extends BaseEntity {
