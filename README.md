@@ -54,6 +54,10 @@ Employer (고용주)
             └─ EwaRequest (선지급 요청)
 ```
 
+## ERD
+
+![ERD](docs/images/erd.png)
+
 ### 비즈니스 규칙
 
 ```
@@ -84,7 +88,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 
 ```
 ✅ Phase 1: 프로젝트 세팅 (Spring Boot + PostgreSQL + JWT)
-⬜ Phase 2: 엔티티 설계 (Employer / Worker / Employment / WorkSession / EwaRequest)
+✅ Phase 2: 엔티티 설계 (Employer / Worker / Employment / WorkSession / EwaRequest)
 ⬜ Phase 3: JWT 인증 (회원가입 / 로그인)
 ⬜ Phase 4: 근무 세션 API (출근 / 퇴근 / 급여 계산)
 ⬜ Phase 5: 선지급 API (멱등성 + 분산 락)

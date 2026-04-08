@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.worksession;
 
 import com.wageclock.wageclock.domain.employment.Employment;
+import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -11,10 +12,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "work_session")
+@Table(name = "work_sessions")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
-public class WorkSession {
+public class WorkSession extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
