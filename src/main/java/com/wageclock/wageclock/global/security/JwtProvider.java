@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.global.security;
 
 
+import com.wageclock.wageclock.domain.auth.UserRole;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -8,12 +9,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.security.Key;
 import java.util.Date;
 
 @Component
 public class JwtProvider {
-    private final Key key;
+    private final SecretKey key;
     private final long expiration;
 
     public JwtProvider(@Value("${jwt.secret}")String secret, @Value("${jwt.expiration}") long expiration) {
@@ -21,10 +21,10 @@ public class JwtProvider {
         this.expiration = expiration;
     }
 
-    public String generateToken(Long id, String role) {
+    public String generateToken(Long id, UserRole role) {
         return Jwts.builder()
                 .subject(String.valueOf(id))
-                .claim("role", role)
+                .claim("role", role.name())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(key)
@@ -33,7 +33,7 @@ public class JwtProvider {
 
     public Claims getClaims(String token){
         return Jwts.parser()
-                .verifyWith((SecretKey) key)
+                .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
@@ -49,7 +49,7 @@ public class JwtProvider {
     public Long getIdFromToken(String token) {
         return Long.parseLong(getClaims(token).getSubject());
     }
-    public String getRoleFromToken(String token) {
-        return getClaims(token).get("role", String.class);
+    public UserRole getRoleFromToken(String token) {
+        return UserRole.valueOf(getClaims(token).get("role", String.class));
     }
 }

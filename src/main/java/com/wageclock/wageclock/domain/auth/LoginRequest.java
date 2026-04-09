@@ -1,4 +1,4 @@
 package com.wageclock.wageclock.domain.auth;
 
-public class LoginRequest {
-}
+
+public record LoginRequest (String email, String password, UserRole role) {}

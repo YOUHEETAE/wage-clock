@@ -1,4 +1,6 @@
 package com.wageclock.wageclock.domain.auth;
 
-public class UserRole {
+public enum UserRole {
+    EMPLOYER,
+    WORKER
 }
