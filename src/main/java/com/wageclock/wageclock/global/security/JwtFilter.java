@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.global.security;
 
+import com.wageclock.wageclock.domain.auth.UserRole;
 import jakarta.annotation.Nonnull;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -28,11 +29,11 @@ public class JwtFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
         if (token != null && jwtProvider.validateToken(token)) {
             Long id = jwtProvider.getIdFromToken(token);
-            String role = jwtProvider.getRoleFromToken(token);
+            UserRole role = jwtProvider.getRoleFromToken(token);
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(id, null,
-                            List.of(new SimpleGrantedAuthority(role)));
+                            List.of(new SimpleGrantedAuthority(role.name())));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
