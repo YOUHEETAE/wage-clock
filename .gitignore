@@ -33,3 +33,7 @@ application.properties
 # Gradle
 .gradle/
 build/
+
+# postman
+.postman/
+postman/
