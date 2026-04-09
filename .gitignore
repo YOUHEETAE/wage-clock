@@ -23,9 +23,6 @@
 hs_err_pid*
 replay_pid*
 
-#properties
-application.properties
-
 # IDE
 .idea/
 *.iml
