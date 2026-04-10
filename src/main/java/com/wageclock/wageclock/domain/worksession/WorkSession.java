@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Entity
@@ -62,5 +64,13 @@ public class WorkSession extends BaseEntity {
         WORKING,
         PAUSED,
         COMPLETED
+    }
+
+    public void clockOut(){
+        this.clockOut = LocalDateTime.now();
+        this.status = WorkSessionStatus.COMPLETED;
+        BigDecimal seconds = BigDecimal.valueOf(Duration.between(clockIn, clockOut).toSeconds());
+        this.earnedAmount = hourlyWage.multiply(seconds)
+                .divide(BigDecimal.valueOf(3600), 2, RoundingMode.HALF_UP);
     }
 }
