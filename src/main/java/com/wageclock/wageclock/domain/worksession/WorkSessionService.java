@@ -5,6 +5,7 @@ import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Service
