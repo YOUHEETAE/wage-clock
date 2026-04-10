@@ -28,7 +28,7 @@
 ```
 출근 → 급여시계 시작 (분 단위 적립)
 퇴근 → 급여 확정
-선지급 요청 → 적립액의 30% 한도 내에서 즉시 지급
+선지급 요청 → 근무 중/퇴근 후 모두 가능, 적립액의 30% 한도 내에서 즉시 지급    
 고용주 대시보드 → 직원별 급여 현황 실시간 조회
 ```
 
@@ -38,7 +38,7 @@
 
 ```
 선지급 중복 요청 방지  → 멱등성 (Idempotency Key)
-동시 선지급 요청 제어  → 분산 락 (Distributed Lock)
+동시 선지급 요청 제어  → 분산 락 (Redisson)
 결제 상태 관리         → 상태 머신 (PENDING → APPROVED → PAID → REJECTED)
 실제 결제 연동         → 토스 페이먼츠 샌드박스
 ```
@@ -61,8 +61,7 @@ Employer (고용주)
 ### 비즈니스 규칙
 
 ```
-선지급 가능 조건: WorkSession.status = COMPLETED (퇴근 완료)
-선지급 한도:     earnedAmount × 30%
+선지급 한도:     실시간 적립액 × 30% 로 수정     
 선지급 잔액:     한도 - totalEwaAmount (누적 선지급액)
 Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ```
@@ -79,6 +78,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **ORM** | Spring Data JPA (Hibernate) |
 | **인증** | JWT |
 | **결제** | 토스 페이먼츠 샌드박스 |
+| **분산 락** | Redis (Redisson) |  
 | **인프라** | Docker |
 | **빌드** | Gradle |
 
@@ -92,7 +92,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 3: JWT 인증 (회원가입 / 로그인)
 ✅ Phase 4: 근무 세션 API (출근 / 퇴근 / 급여 계산)
 ✅ Phase 5: 선지급 API (멱등성)
-⬜ Phase 5.5: redis 연동 (분산 락)
+✅ Phase 5.5: redis 연동 (분산 락)
 ⬜ Phase 6: 토스 페이먼츠 연동
 ⬜ Phase 7: 고용주 대시보드 API
 ⬜ Phase 8: React 프론트엔드 (급여시계 UI)
