@@ -91,7 +91,8 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 2: 엔티티 설계 (Employer / Worker / Employment / WorkSession / EwaRequest)
 ✅ Phase 3: JWT 인증 (회원가입 / 로그인)
 ✅ Phase 4: 근무 세션 API (출근 / 퇴근 / 급여 계산)
-⬜ Phase 5: 선지급 API (멱등성 + 분산 락)
+✅ Phase 5: 선지급 API (멱등성)
+⬜ Phase 5.5: redis 연동 (분산 락)
 ⬜ Phase 6: 토스 페이먼츠 연동
 ⬜ Phase 7: 고용주 대시보드 API
 ⬜ Phase 8: React 프론트엔드 (급여시계 UI)
