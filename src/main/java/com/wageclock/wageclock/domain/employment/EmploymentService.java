@@ -29,6 +29,10 @@ public class EmploymentService {
                 .orElseThrow(() -> new InvalidParameterException("employerId"));
         Worker worker = workerRepository.findById(createEmploymentRequest.workerId())
                 .orElseThrow(() -> new InvalidParameterException("workerId"));
+        if(employmentRepository.existsByEmployerIdAndWorkerId(employerId,
+                createEmploymentRequest.workerId())){
+            throw new InvalidParameterException("employment is already exists");
+        }
         Employment employment = employmentRepository.save(Employment.builder()
                 .employer(employer).worker(worker).hourlyWage(createEmploymentRequest.hourlyWage()).build());
         return new CreateEmploymentResponse(employment.getId(), createEmploymentRequest.hourlyWage());

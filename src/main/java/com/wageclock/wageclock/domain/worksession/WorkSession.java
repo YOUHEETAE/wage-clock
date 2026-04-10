@@ -67,10 +67,25 @@ public class WorkSession extends BaseEntity {
     }
 
     public void clockOut(){
+        if(isCompleted()){
+            throw new IllegalStateException("Work session has already been closed");
+        }
         this.clockOut = LocalDateTime.now();
         this.status = WorkSessionStatus.COMPLETED;
-        BigDecimal seconds = BigDecimal.valueOf(Duration.between(clockIn, clockOut).toSeconds());
-        this.earnedAmount = hourlyWage.multiply(seconds)
-                .divide(BigDecimal.valueOf(3600), 2, RoundingMode.HALF_UP);
+        this.earnedAmount = getCurrentEarnedAmount();
+    }
+
+    public boolean isCompleted() {
+        return status == WorkSessionStatus.COMPLETED;
+    }
+
+    public BigDecimal getRemainingEwaLimit() {
+        return getCurrentEarnedAmount().multiply(BigDecimal.valueOf(0.3)).subtract(this.totalEwaAmount);
+    }
+
+    public BigDecimal getCurrentEarnedAmount() {
+        if(isCompleted()) return this.earnedAmount;
+        BigDecimal seconds = BigDecimal.valueOf(Duration.between(clockIn, LocalDateTime.now()).toSeconds());
+        return hourlyWage.multiply(seconds).divide(BigDecimal.valueOf(3600), 2, RoundingMode.HALF_UP);
     }
 }
