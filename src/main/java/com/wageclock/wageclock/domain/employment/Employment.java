@@ -49,4 +49,7 @@ public class Employment extends BaseEntity {
         TERMINATED,
         SUSPENDED
     }
+    public Long getWorkerId() {
+        return worker.getId();
+    }
 }
