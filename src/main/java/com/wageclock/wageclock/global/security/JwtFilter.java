@@ -6,6 +6,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,17 +18,20 @@ import java.util.List;
 public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtProvider jwtProvider;
+    private final RedisTemplate<String, String> redisTemplate;
 
-    public JwtFilter(JwtProvider jwtProvider) {
+    public JwtFilter(JwtProvider jwtProvider,  RedisTemplate<String, String> redisTemplate) {
         this.jwtProvider = jwtProvider;
+        this.redisTemplate = redisTemplate;
     }
 
     @Override
     protected void  doFilterInternal(@Nonnull HttpServletRequest request,
-                                     @Nonnull HttpServletResponse response, @Nonnull FilterChain filterChain)
-            throws ServletException, IOException {
+                                     @Nonnull HttpServletResponse response,
+                                     @Nonnull FilterChain filterChain) throws ServletException, IOException {
         String token = resolveToken(request);
-        if (token != null && jwtProvider.validateToken(token)) {
+        if (token != null && jwtProvider.validateToken(token)
+                && !redisTemplate.hasKey("blacklist:" + token)) {
             Long id = jwtProvider.getIdFromToken(token);
             UserRole role = jwtProvider.getRoleFromToken(token);
 
