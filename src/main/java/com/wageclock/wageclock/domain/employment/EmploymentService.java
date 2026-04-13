@@ -4,10 +4,10 @@ import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
+import com.wageclock.wageclock.global.exception.DuplicateException;
+import com.wageclock.wageclock.global.exception.NotFoundException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-
-import java.security.InvalidParameterException;
 
 @Service
 public class EmploymentService {
@@ -23,15 +23,16 @@ public class EmploymentService {
         this.employmentRepository = employmentRepository;
         this.employerRepository = employerRepository;
     }
+
     public CreateEmploymentResponse createEmployment(CreateEmploymentRequest createEmploymentRequest){
         Long employerId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Employer employer = employerRepository.findById(employerId)
-                .orElseThrow(() -> new InvalidParameterException("employerId"));
+                .orElseThrow(() -> new NotFoundException("employer not found"));
         Worker worker = workerRepository.findById(createEmploymentRequest.workerId())
-                .orElseThrow(() -> new InvalidParameterException("workerId"));
+                .orElseThrow(() -> new NotFoundException("worker not found"));
         if(employmentRepository.existsByEmployerIdAndWorkerId(employerId,
                 createEmploymentRequest.workerId())){
-            throw new InvalidParameterException("employment is already exists");
+            throw new DuplicateException("employment already exists");
         }
         Employment employment = employmentRepository.save(Employment.builder()
                 .employer(employer).worker(worker).hourlyWage(createEmploymentRequest.hourlyWage()).build());
