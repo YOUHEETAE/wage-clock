@@ -5,7 +5,6 @@ import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -21,12 +20,10 @@ public class WorkSessionService {
         this.employmentRepository = employmentRepository;
     }
 
-    public ClockInResponse clockIn(ClockInRequest clockInRequest){
-        Long workerId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-
+    public ClockInResponse clockIn(ClockInRequest clockInRequest, Long workerId){
         Employment employment = employmentRepository.findById(clockInRequest.employmentId())
                 .orElseThrow(() -> new NotFoundException("employment not found"));
-        if (!employment.getWorker().getId().equals(workerId)) {
+        if (!employment.getWorkerId().equals(workerId)) {
             throw new UnauthorizedException("unauthorized");
         }
         if(workSessionRepository.existsByEmploymentIdAndStatus(clockInRequest.employmentId(),
@@ -38,11 +35,10 @@ public class WorkSessionService {
         return new ClockInResponse(workSession.getId(), workSession.getClockIn());
     }
 
-    public ClockOutResponse clockOut(ClockOutRequest clockOutRequest){
-        Long workerId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    public ClockOutResponse clockOut(ClockOutRequest clockOutRequest, Long workerId){
         WorkSession workSession = workSessionRepository.findById(clockOutRequest.sessionId())
                 .orElseThrow(() -> new NotFoundException("session not found"));
-        if(!workSession.getEmployment().getWorker().getId().equals(workerId)){
+        if(!workSession.getWorkerId().equals(workerId)){
             throw new UnauthorizedException("unauthorized");
         }
         workSession.clockOut();

@@ -12,8 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -43,9 +41,6 @@ public class EmploymentServiceTest {
 
     @BeforeEach
     void setUp() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(1L, null, null)
-        );
         employer = Employer.builder().name("홍길동").email("employer@test.com").password("password").build();
         worker = Worker.builder().name("아무개").email("worker@test.com").password("password").build();
     }
@@ -54,7 +49,7 @@ public class EmploymentServiceTest {
     void employer_없음_예외() {
         when(employerRepository.findById(1L)).thenReturn(Optional.empty());
         CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
-        assertThrows(NotFoundException.class, () -> employmentService.createEmployment(request));
+        assertThrows(NotFoundException.class, () -> employmentService.createEmployment(request, 1L));
     }
 
     @Test
@@ -62,7 +57,7 @@ public class EmploymentServiceTest {
         when(employerRepository.findById(1L)).thenReturn(Optional.of(employer));
         when(workerRepository.findById(2L)).thenReturn(Optional.empty());
         CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
-        assertThrows(NotFoundException.class, () -> employmentService.createEmployment(request));
+        assertThrows(NotFoundException.class, () -> employmentService.createEmployment(request, 1L));
     }
 
     @Test
@@ -71,7 +66,7 @@ public class EmploymentServiceTest {
         when(workerRepository.findById(2L)).thenReturn(Optional.of(worker));
         when(employmentRepository.existsByEmployerIdAndWorkerId(1L, 2L)).thenReturn(true);
         CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
-        assertThrows(DuplicateException.class, () -> employmentService.createEmployment(request));
+        assertThrows(DuplicateException.class, () -> employmentService.createEmployment(request, 1L));
     }
 
     @Test
@@ -83,7 +78,7 @@ public class EmploymentServiceTest {
         when(savedEmployment.getId()).thenReturn(10L);
 
         CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
-        CreateEmploymentResponse response = employmentService.createEmployment(request);
+        CreateEmploymentResponse response = employmentService.createEmployment(request, 1L);
 
         assertEquals(10L, response.employmentId());
         assertEquals(BigDecimal.valueOf(10000), response.hourlyWage());

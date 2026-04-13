@@ -1,9 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/ewaRequest")
@@ -15,7 +13,18 @@ public class EwaRequestController {
     }
 
     @PostMapping("/request")
-    public EwaResponseDto request(@RequestBody EwaRequestDto requestDto){
-        return ewaRequestService.requestEwa(requestDto);
+    public EwaResponseDto request(@RequestBody EwaRequestDto requestDto,
+                                  @AuthenticationPrincipal Long workerId) {
+        return ewaRequestService.requestEwa(requestDto, workerId);
+    }
+    @PostMapping("/{ewaRequestId}/approve")
+    public EwaResponseDto approve(@PathVariable Long ewaRequestId,
+                                  @AuthenticationPrincipal Long employerId) {
+        return ewaRequestService.approveEwa(ewaRequestId, employerId);
+    }
+    @PostMapping("/{ewaRequestId}/reject")
+    public EwaResponseDto reject(@PathVariable Long ewaRequestId,
+                                 @AuthenticationPrincipal Long employerId) {
+        return ewaRequestService.rejectEwa(ewaRequestId, employerId);
     }
 }

@@ -6,7 +6,6 @@ import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.NotFoundException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,8 +23,7 @@ public class EmploymentService {
         this.employerRepository = employerRepository;
     }
 
-    public CreateEmploymentResponse createEmployment(CreateEmploymentRequest createEmploymentRequest){
-        Long employerId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    public CreateEmploymentResponse createEmployment(CreateEmploymentRequest createEmploymentRequest, Long employerId){
         Employer employer = employerRepository.findById(employerId)
                 .orElseThrow(() -> new NotFoundException("employer not found"));
         Worker worker = workerRepository.findById(createEmploymentRequest.workerId())
