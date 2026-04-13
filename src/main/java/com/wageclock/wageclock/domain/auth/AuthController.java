@@ -1,9 +1,8 @@
 package com.wageclock.wageclock.domain.auth;
 
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -18,7 +17,14 @@ public class AuthController {
         return authService.login(loginRequest);
     }
     @PostMapping("/signup")
+    @ResponseStatus(HttpStatus.CREATED)
     public void signup(@RequestBody SignupRequest signupRequest) {
         authService.signup(signupRequest);
+    }
+    @PostMapping("/logout")
+    public ResponseEntity<Object> logout(@RequestHeader("Authorization") String bearerToken) {
+        String token = bearerToken.substring(7);
+        authService.logout(token);
+        return ResponseEntity.ok().build();
     }
 }

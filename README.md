@@ -40,7 +40,7 @@
 선지급 중복 요청 방지  → 멱등성 (Idempotency Key)
 동시 선지급 요청 제어  → 분산 락 (Redisson)
 결제 상태 관리         → 상태 머신 (PENDING → APPROVED → PAID → REJECTED)
-실제 결제 연동         → 토스 페이먼츠 샌드박스
+실제 결제 연동         → PaymentService 인터페이스 분리로 PG사 교체 가능한 구조 설계
 ```
 
 ---
@@ -77,7 +77,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **데이터베이스** | PostgreSQL 16 |
 | **ORM** | Spring Data JPA (Hibernate) |
 | **인증** | JWT |
-| **결제** | 토스 페이먼츠 샌드박스 |
+| **결제** | Mock Payment Service (PG사 교체 가능한 구조) |
 | **분산 락** | Redis (Redisson) |  
 | **인프라** | Docker |
 | **빌드** | Gradle |
