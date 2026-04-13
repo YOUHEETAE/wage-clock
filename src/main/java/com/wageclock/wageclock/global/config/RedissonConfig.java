@@ -9,10 +9,10 @@ import org.redisson.api.RedissonClient;
 
 @Configuration
 public class RedissonConfig {
-    @Value("${REDIS_HOST}")
+    @Value("${spring.data.redis.host}")
     private String host;
 
-    @Value("${REDIS_PORT}")
+    @Value("${spring.data.redis.port}")
     private int port;
 
     @Bean

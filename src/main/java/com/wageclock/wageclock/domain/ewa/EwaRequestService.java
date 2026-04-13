@@ -2,6 +2,9 @@ package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.global.exception.NotFoundException;
+import com.wageclock.wageclock.global.exception.TooManyRequestsException;
+import com.wageclock.wageclock.global.exception.UnauthorizedException;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -30,14 +33,13 @@ public class EwaRequestService {
         RLock lock = redissonClient.getLock("ewa:lock:" + workerId);
         try {
             if(!lock.tryLock(3,5, TimeUnit.SECONDS)){
-                throw new RuntimeException("Too many Request");
+                throw new TooManyRequestsException("Too many Request");
             }
             WorkSession workSession = workSessionRepository.findById(ewaRequestDto.sessionId())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid session Id"));
+                    .orElseThrow(() -> new NotFoundException("Invalid session Id"));
             if (!workSession.getEmployment().getWorker().getId().equals(workerId)) {
-                throw new IllegalArgumentException("Invalid worker Id");
+                throw new UnauthorizedException("Invalid worker Id");
             }
-
             BigDecimal limitEwaAmount = workSession.getRemainingEwaLimit();
 
             if (ewaRequestDto.requestAmount().compareTo(limitEwaAmount) > 0 ||
@@ -54,8 +56,14 @@ public class EwaRequestService {
                     .requestedAmount(ewaRequestDto.requestAmount())
                     .idempotencyKey(ewaRequestDto.idempotencyKey())
                     .build());
+
+            workSession.addEwaAmount(ewaRequestDto.requestAmount());
+            workSessionRepository.save(workSession);
+
             return new EwaResponseDto(ewaRequest.getId(),
                     ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
+
+
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Lock Interrupted");
