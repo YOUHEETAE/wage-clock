@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.ewa;
 
+import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
@@ -47,5 +48,16 @@ public class EwaRequest extends BaseEntity {
         APPROVED,
         REJECTED,
         PAID
+    }
+
+    public void approved(){
+        this.status = EwaRequestStatus.APPROVED;
+    }
+    public void rejected(){
+        this.status = EwaRequestStatus.REJECTED;
+    }
+
+    public Long getEmployerId(){
+        return workSession.getEmployment().getEmployer().getId();
     }
 }

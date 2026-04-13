@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.employment;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,7 +16,8 @@ public class EmploymentController {
     }
 
     @PostMapping
-    public CreateEmploymentResponse createEmployment(@RequestBody CreateEmploymentRequest createEmploymentRequest) {
-        return employmentService.createEmployment(createEmploymentRequest);
+    public CreateEmploymentResponse createEmployment(@RequestBody CreateEmploymentRequest createEmploymentRequest,
+                                                     @AuthenticationPrincipal Long employerId) {
+        return employmentService.createEmployment(createEmploymentRequest, employerId);
     }
 }

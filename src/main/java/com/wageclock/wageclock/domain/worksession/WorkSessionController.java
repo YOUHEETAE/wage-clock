@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.worksession;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,11 +16,13 @@ public class WorkSessionController {
     }
 
     @PostMapping("/clockIn")
-    public ClockInResponse clockIn (@RequestBody ClockInRequest clockInRequest){
-        return workSessionService.clockIn(clockInRequest);
+    public ClockInResponse clockIn (@RequestBody ClockInRequest clockInRequest,
+                                    @AuthenticationPrincipal Long workerId) {
+        return workSessionService.clockIn(clockInRequest, workerId);
     }
     @PostMapping("/clockOut")
-    public ClockOutResponse clockOut (@RequestBody ClockOutRequest clockOutRequest){
-        return workSessionService.clockOut(clockOutRequest);
+    public ClockOutResponse clockOut (@RequestBody ClockOutRequest clockOutRequest,
+                                      @AuthenticationPrincipal Long workerId) {
+        return workSessionService.clockOut(clockOutRequest, workerId);
     }
 }
