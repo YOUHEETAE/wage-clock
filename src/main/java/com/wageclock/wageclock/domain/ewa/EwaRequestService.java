@@ -1,6 +1,6 @@
 package com.wageclock.wageclock.domain.ewa;
 
-import com.wageclock.wageclock.domain.payment.PaymentResult;
+import com.wageclock.wageclock.domain.payment.Payment;
 import com.wageclock.wageclock.domain.payment.PaymentService;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
@@ -87,11 +87,11 @@ public class EwaRequestService {
         if(!ewaRequest.getEmployerId().equals(employerId)){
             throw new UnauthorizedException("Invalid employer Id");
         }
-        PaymentResult status = paymentService.processPayment(ewaRequest.getRequestedAmount());
-        if(status.equals(PaymentResult.SUCCESS)){
+        Payment payment = paymentService.processPayment(ewaRequest);
+        if(payment.getStatus().equals(Payment.PaymentStatus.COMPLETED)){
             ewaRequest.approved();
             ewaRequestRepository.save(ewaRequest);
-        } else if (status.equals(PaymentResult.FAILURE)) {
+        } else if (payment.getStatus().equals(Payment.PaymentStatus.FAILED)) {
             ewaRequest.rejected();
             ewaRequest.getWorkSession().subtractEwaAmount(ewaRequest.getRequestedAmount());
             workSessionRepository.save(ewaRequest.getWorkSession());

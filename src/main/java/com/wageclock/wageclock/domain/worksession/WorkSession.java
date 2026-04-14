@@ -1,7 +1,6 @@
 package com.wageclock.wageclock.domain.worksession;
 
 import com.wageclock.wageclock.domain.employment.Employment;
-import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
