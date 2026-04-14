@@ -1,7 +1,8 @@
 package com.wageclock.wageclock.domain.payment;
 
-import java.math.BigDecimal;
+import com.wageclock.wageclock.domain.ewa.EwaRequest;
+
 
 public interface PaymentService {
-    PaymentResult processPayment(BigDecimal requestAmount);
+    Payment processPayment(EwaRequest  ewaRequest);
 }
