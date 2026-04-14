@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.employment.Employment;
-import com.wageclock.wageclock.domain.payment.PaymentResult;
+import com.wageclock.wageclock.domain.payment.Payment;
 import com.wageclock.wageclock.domain.payment.PaymentService;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
@@ -35,6 +35,7 @@ public class EwaRequestServiceTest {
     @Mock WorkSession workSession;
     @Mock PaymentService paymentService;
     @Mock EwaRequest ewaRequest;
+    @Mock Payment payment;
 
     @InjectMocks
     EwaRequestService ewaRequestService;
@@ -131,7 +132,8 @@ public class EwaRequestServiceTest {
                 .thenReturn(EwaRequest.EwaRequestStatus.PENDING)
                 .thenReturn(EwaRequest.EwaRequestStatus.APPROVED);
         when(ewaRequest.getEmployerId()).thenReturn(1L);
-        when(paymentService.processPayment(any())).thenReturn(PaymentResult.SUCCESS);
+        when(paymentService.processPayment(any())).thenReturn(payment);
+        when(payment.getStatus()).thenReturn(Payment.PaymentStatus.COMPLETED);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
 
         EwaResponseDto response = ewaRequestService.approveEwa(1L, 1L);
@@ -145,7 +147,8 @@ public class EwaRequestServiceTest {
                 .thenReturn(EwaRequest.EwaRequestStatus.PENDING)
                 .thenReturn(EwaRequest.EwaRequestStatus.REJECTED);
         when(ewaRequest.getEmployerId()).thenReturn(1L);
-        when(paymentService.processPayment(any())).thenReturn(PaymentResult.FAILURE);
+        when(paymentService.processPayment(any())).thenReturn(payment);
+        when(payment.getStatus()).thenReturn(Payment.PaymentStatus.FAILED);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
         when(ewaRequest.getWorkSession()).thenReturn(workSession);
 
