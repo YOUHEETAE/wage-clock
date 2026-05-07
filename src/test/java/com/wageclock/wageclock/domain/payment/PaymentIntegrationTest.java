@@ -8,12 +8,11 @@ import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
-import com.wageclock.wageclock.domain.ewa.EwaRequestDto;
-import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.ewa.EwaResponseDto;
+import com.wageclock.wageclock.domain.ewa.*;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.*;
+import com.wageclock.wageclock.infrastructure.PortOneWebhookPayload;
+import org.hibernate.Transaction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -36,6 +36,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
@@ -53,7 +55,6 @@ public class PaymentIntegrationTest {
         registry.add("spring.datasource.password", postgreSQLContainer::getPassword);
         registry.add("spring.data.redis.host", redisContainer::getHost);
         registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
-        registry.add("JWT_SECRET", () -> "wageclock-secret-key-must-be-at-least-256-bits-long");
     }
 
     @Autowired
@@ -70,6 +71,10 @@ public class PaymentIntegrationTest {
     EwaRequestRepository ewaRequestRepository;
     @Autowired
     PaymentRepository paymentRepository;
+    @MockitoBean
+    VirtualAccountPort virtualAccountPort;
+    @MockitoBean
+    PaymentScheduler paymentScheduler;
 
     @AfterEach
     void tearDown() {
@@ -151,13 +156,21 @@ public class PaymentIntegrationTest {
 
     @Test
     void 승인_시_payment_저장_및_ewa_status_APPROVE(){
+        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
+                .thenReturn(new VirtualAccountResult("Toss", "1234", "2026-05-05"));
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/approve",
-                new HttpEntity<>(employerHeaders()), EwaResponseDto.class);
+        ResponseEntity<InitiateEwaResponse> response = testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
+                new HttpEntity<>(employerHeaders()), InitiateEwaResponse.class);
+        String portOnePaymentId = paymentRepository.findAll().get(0).getPortOnePaymentId();
+        ResponseEntity<Void> webhookResponse = testRestTemplate.postForEntity(
+                "/webhook",
+                new PortOneWebhookPayload("Transaction.Paid", "",
+                        new PortOneWebhookPayload.Data("", portOnePaymentId, "")), Void.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         List<Payment> payment = paymentRepository.findAllWithHistories();
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).orElseThrow();
         assertEquals(1, payment.size());
+        assertEquals(3, payment.get(0).getHistories().size());
         assertEquals(Payment.PaymentStatus.COMPLETED, payment.get(0).getStatus());
         assertEquals(Payment.PaymentStatus.READY, payment.get(0).getHistories().get(0).getStatus());
         assertEquals(Payment.PaymentStatus.PROCESSING, payment.get(0).getHistories().get(1).getStatus());

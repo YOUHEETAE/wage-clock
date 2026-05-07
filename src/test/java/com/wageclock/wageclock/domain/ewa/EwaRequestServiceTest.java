@@ -2,7 +2,8 @@ package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.payment.Payment;
-import com.wageclock.wageclock.domain.payment.PaymentService;
+import com.wageclock.wageclock.domain.payment.PortOnePaymentService;
+import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
@@ -33,7 +34,7 @@ public class EwaRequestServiceTest {
     @Mock Worker worker;
     @Mock WorkSessionRepository workSessionRepository;
     @Mock WorkSession workSession;
-    @Mock PaymentService paymentService;
+    @Mock PortOnePaymentService portOnePaymentService;
     @Mock EwaRequest ewaRequest;
     @Mock Payment payment;
 
@@ -55,7 +56,7 @@ public class EwaRequestServiceTest {
                 .clockIn(LocalDateTime.now().minusHours(2))
                 .employment(employment).build();
         workSession.clockOut();
-        when(workSessionRepository.findById(1L)).thenReturn(Optional.of(workSession));
+        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
         EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.valueOf(10000), "key-1");
         assertThrows(IllegalArgumentException.class, () -> ewaRequestService.requestEwa(ewaRequestDto, 1L));
     }
@@ -70,7 +71,7 @@ public class EwaRequestServiceTest {
                 .clockIn(LocalDateTime.now().minusHours(2))
                 .employment(employment).build();
         workSession.clockOut();
-        when(workSessionRepository.findById(1L)).thenReturn(Optional.of(workSession));
+        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
         when(ewaRequestRepository.existsByIdempotencyKey("key-1")).thenReturn(true);
         EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
         assertThrows(IllegalArgumentException.class, () -> ewaRequestService.requestEwa(ewaRequestDto, 1L));
@@ -90,7 +91,7 @@ public class EwaRequestServiceTest {
                 .clockIn(LocalDateTime.now().minusHours(2))
                 .employment(employment).build();
         workSession.clockOut();
-        when(workSessionRepository.findById(1L)).thenReturn(Optional.of(workSession));
+        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
         EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
         EwaResponseDto ewaResponseDto = new EwaResponseDto(1L, BigDecimal.ONE, EwaRequest.EwaRequestStatus.PENDING);
         assertEquals(ewaResponseDto, ewaRequestService.requestEwa(ewaRequestDto, 1L));
@@ -107,14 +108,14 @@ public class EwaRequestServiceTest {
     @Test
     void EWA요청_없음_예외() {
         when(ewaRequestRepository.findById(1L)).thenReturn(Optional.empty());
-        assertThrows(RuntimeException.class, () -> ewaRequestService.approveEwa(1L, 1L));
+        assertThrows(RuntimeException.class, () -> ewaRequestService.initiateEwa(1L, 1L));
     }
 
     @Test
     void PENDING_아님_예외() {
         when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
         when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.APPROVED);
-        assertThrows(IllegalStateException.class, () -> ewaRequestService.approveEwa(1L, 1L));
+        assertThrows(IllegalStateException.class, () -> ewaRequestService.initiateEwa(1L, 1L));
     }
 
     @Test
@@ -122,38 +123,23 @@ public class EwaRequestServiceTest {
         when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
         when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
         when(ewaRequest.getEmployerId()).thenReturn(2L);
-        assertThrows(RuntimeException.class, () -> ewaRequestService.approveEwa(1L, 1L));
+        assertThrows(RuntimeException.class, () -> ewaRequestService.initiateEwa(1L, 1L));
     }
 
     @Test
     void 정상_승인() {
         when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
         when(ewaRequest.getStatus())
-                .thenReturn(EwaRequest.EwaRequestStatus.PENDING)
-                .thenReturn(EwaRequest.EwaRequestStatus.APPROVED);
+                .thenReturn(EwaRequest.EwaRequestStatus.PENDING);
         when(ewaRequest.getEmployerId()).thenReturn(1L);
-        when(paymentService.processPayment(any())).thenReturn(payment);
-        when(payment.getStatus()).thenReturn(Payment.PaymentStatus.COMPLETED);
+        when(portOnePaymentService.processPayment(any())).thenReturn(payment);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
+        when(payment.getPortOnePaymentId()).thenReturn("test-id");
+        when(portOnePaymentService.getAccount(any(), any(), any(), any()))
+                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
 
-        EwaResponseDto response = ewaRequestService.approveEwa(1L, 1L);
-        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, response.status());
-    }
-
-    @Test
-    void PG_실패_시_거절() {
-        when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
-        when(ewaRequest.getStatus())
-                .thenReturn(EwaRequest.EwaRequestStatus.PENDING)
-                .thenReturn(EwaRequest.EwaRequestStatus.REJECTED);
-        when(ewaRequest.getEmployerId()).thenReturn(1L);
-        when(paymentService.processPayment(any())).thenReturn(payment);
-        when(payment.getStatus()).thenReturn(Payment.PaymentStatus.FAILED);
-        when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
-        when(ewaRequest.getWorkSession()).thenReturn(workSession);
-
-        EwaResponseDto response = ewaRequestService.approveEwa(1L, 1L);
-        assertEquals(EwaRequest.EwaRequestStatus.REJECTED, response.status());
+        InitiateEwaResponse response = ewaRequestService.initiateEwa(1L, 1L);
+        assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.status());
     }
 
     @Test

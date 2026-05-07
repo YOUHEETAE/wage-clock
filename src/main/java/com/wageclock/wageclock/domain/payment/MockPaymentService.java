@@ -20,7 +20,6 @@ public class MockPaymentService implements PaymentService{
                 .employer(ewaRequest.getEmployer())
                 .ewaRequest(ewaRequest)
                 .amount(ewaRequest.getRequestedAmount())
-                .idempotencyKey(UUID.randomUUID().toString())
                 .build();
         paymentRepository.save(payment);
         payment.processing();
