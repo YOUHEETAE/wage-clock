@@ -63,4 +63,8 @@ public class EwaRequest extends BaseEntity {
     public Employer getEmployer() {
         return this.workSession.getEmployment().getEmployer();
     }
+
+    public String getEmployerName() {
+        return this.workSession.getEmployment().getEmployer().getName();
+    }
 }

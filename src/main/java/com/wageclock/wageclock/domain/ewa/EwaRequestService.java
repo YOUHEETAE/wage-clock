@@ -1,7 +1,6 @@
 package com.wageclock.wageclock.domain.ewa;
 
-import com.wageclock.wageclock.domain.payment.Payment;
-import com.wageclock.wageclock.domain.payment.PaymentService;
+import com.wageclock.wageclock.domain.payment.*;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
@@ -10,8 +9,10 @@ import com.wageclock.wageclock.global.exception.UnauthorizedException;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -20,17 +21,18 @@ public class EwaRequestService {
     private final WorkSessionRepository workSessionRepository;
     private final EwaRequestRepository ewaRequestRepository;
     private final RedissonClient redissonClient;
-    private final PaymentService paymentService;
+    private final PortOnePaymentService portOnePaymentService;
 
     public EwaRequestService(WorkSessionRepository workSessionRepository,
-                             EwaRequestRepository ewaRequestRepository,
-                             RedissonClient redissonClient, PaymentService paymentService) {
+                             EwaRequestRepository ewaRequestRepository, RedissonClient redissonClient,
+                             PortOnePaymentService portOnePaymentService) {
         this.workSessionRepository = workSessionRepository;
         this.ewaRequestRepository = ewaRequestRepository;
         this.redissonClient = redissonClient;
-        this.paymentService = paymentService;
+        this.portOnePaymentService = portOnePaymentService;
     }
 
+    @Transactional
     public EwaResponseDto requestEwa(EwaRequestDto ewaRequestDto, Long workerId){
         RLock lock = redissonClient.getLock("ewa:lock:" + workerId);
         try {
@@ -49,7 +51,7 @@ public class EwaRequestService {
     }
 
     private EwaResponseDto processEwaRequest(EwaRequestDto ewaRequestDto, Long workerId){
-        WorkSession workSession = workSessionRepository.findById(ewaRequestDto.sessionId())
+        WorkSession workSession = workSessionRepository.findByIdWithLock(ewaRequestDto.sessionId())
                 .orElseThrow(() -> new NotFoundException("Invalid session Id"));
         if (!workSession.getWorkerId().equals(workerId)) {
             throw new UnauthorizedException("Invalid worker Id");
@@ -78,7 +80,7 @@ public class EwaRequestService {
                 ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
     }
 
-    public EwaResponseDto approveEwa(Long ewaRequestId, Long employerId){
+    public InitiateEwaResponse initiateEwa(Long ewaRequestId, Long employerId){
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaRequestId)
                 .orElseThrow(() -> new NotFoundException("Invalid request Id"));
         if(ewaRequest.getStatus() != EwaRequest.EwaRequestStatus.PENDING){
@@ -87,19 +89,15 @@ public class EwaRequestService {
         if(!ewaRequest.getEmployerId().equals(employerId)){
             throw new UnauthorizedException("Invalid employer Id");
         }
-        Payment payment = paymentService.processPayment(ewaRequest);
-        if(payment.getStatus().equals(Payment.PaymentStatus.COMPLETED)){
-            ewaRequest.approved();
-            ewaRequestRepository.save(ewaRequest);
-        } else if (payment.getStatus().equals(Payment.PaymentStatus.FAILED)) {
-            ewaRequest.rejected();
-            ewaRequest.getWorkSession().subtractEwaAmount(ewaRequest.getRequestedAmount());
-            workSessionRepository.save(ewaRequest.getWorkSession());
-            ewaRequestRepository.save(ewaRequest);
-        }
-        return new EwaResponseDto(ewaRequestId, ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
+        Payment payment = portOnePaymentService.processPayment(ewaRequest);
+        VirtualAccountResult account = portOnePaymentService.getAccount(payment.getPortOnePaymentId(),
+                ewaRequest.getRequestedAmount(), ewaRequestId, ewaRequest.getEmployerName());
+        portOnePaymentService.updatePayment(payment, account);
+        return new InitiateEwaResponse(ewaRequestId, ewaRequest.getRequestedAmount(),
+                ewaRequest.getStatus(), account.accountNumber(), account.bank(), account.expiredAt());
     }
 
+    @Transactional
     public EwaResponseDto rejectEwa(Long ewaRequestId, Long employerId){
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaRequestId)
                 .orElseThrow(() -> new NotFoundException("Invalid request Id"));

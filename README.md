@@ -38,9 +38,29 @@
 
 ```
 선지급 중복 요청 방지  → 멱등성 (Idempotency Key)
-동시 선지급 요청 제어  → 분산 락 (Redisson)
-결제 상태 관리         → 상태 머신 (PENDING → APPROVED → PAID → REJECTED)
-실제 결제 연동         → PaymentService 인터페이스 분리로 PG사 교체 가능한 구조 설계
+동시 선지급 요청 제어  → 분산 락 (Redisson) + Pessimistic Lock (DB 레벨)
+결제 상태 관리         → 상태 머신 (READY → PROCESSING → COMPLETED / FAILED)
+가상계좌 결제 연동     → PortOne V2 REST API (가상계좌 발급 + 웹훅 수신)
+실제 송금 처리         → 오픈뱅킹 미지원으로 가상 계좌 Mock 구현
+                          (실서비스 전환 시 오픈뱅킹 API 연동 필요)
+PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hexagonal Architecture)
+외부 API 트랜잭션 분리 → DB 커넥션 풀 고갈 방지를 위해 외부 API 호출과 @Transactional 분리
+디지털 장부            → 고용주/근로자 가상계좌 잔액 및 트랜잭션 히스토리 관리
+```
+
+---
+
+## 결제 플로우
+
+```
+근로자 EWA 요청 (특정 금액)
+  → 선지급 가능 금액 검증 (적립액 × 30% 한도 내)
+  → PENDING 상태로 요청 저장
+  → 고용주 승인 (initiateEwa)
+  → 요청 금액만큼 고용주에게 가상계좌 발급 (PortOne) — Payment READY → PROCESSING
+  → 고용주가 해당 가상계좌에 입금
+  → PortOne 웹훅으로 입금 확인 (Transaction.Paid) — Payment COMPLETED, EWA APPROVED
+  → 근로자 가상계좌에 입금 처리 (Mock)
 ```
 
 ---
@@ -49,9 +69,13 @@
 
 ```
 Employer (고용주)
+  └─ EmployerAccount (고용주 가상계좌)
   └─ Employment (고용 관계) ── Worker (근로자)
+                                  └─ WorkerAccount (근로자 가상계좌)
        └─ WorkSession (근무 세션 / 급여시계)
             └─ EwaRequest (선지급 요청)
+                 └─ Payment (결제)
+                      └─ PaymentHistory (결제 히스토리)
 ```
 
 ## ERD
@@ -61,10 +85,24 @@ Employer (고용주)
 ### 비즈니스 규칙
 
 ```
-선지급 한도:     실시간 적립액 × 30% 로 수정     
+선지급 한도:     실시간 적립액 × 30%
 선지급 잔액:     한도 - totalEwaAmount (누적 선지급액)
+실제 지급 월급:  확정 번 돈 - totalEwaAmount (월급 정산 시)
 Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ```
+
+### 계산 시점 정리
+
+| 항목 | 계산 시점 | 계산 방법 |
+|------|-----------|-----------|
+| **현재 번 돈** | EWA 요청할 때마다 | `(현재시각 - 출근시각) × 시급 / 3600` |
+| **확정 번 돈** | 퇴근 시 | 퇴근 시점의 현재 번 돈을 DB에 저장 |
+| **선지급 한도** | EWA 요청할 때마다 | `현재 번 돈 × 30% - totalEwaAmount` |
+| **totalEwaAmount** | EWA 요청 시 증가 | `+ requestedAmount` |
+| **totalEwaAmount** | EWA 거절 / 결제 실패 시 감소 | `- requestedAmount` |
+| **실제 지급 월급** | 월급 정산 시 (미구현) | `확정 번 돈 - totalEwaAmount` |
+| **가상계좌 발급** | 고용주 승인(initiateEwa) 시 | PortOne API 호출 |
+| **근로자 가상계좌 입금** | 웹훅 수신 시 | 입금 확인 후 Mock 처리 |
 
 ---
 
@@ -77,7 +115,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **데이터베이스** | PostgreSQL 16 |
 | **ORM** | Spring Data JPA (Hibernate) |
 | **인증** | JWT |
-| **결제** | Mock Payment Service (PG사 교체 가능한 구조) |
+| **결제** | PortOne V2 (가상계좌 실연동) + Mock 송금 |
 | **분산 락** | Redis (Redisson) |  
 | **인프라** | Docker |
 | **빌드** | Gradle |
@@ -95,10 +133,21 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 5.5: redis 연동 (분산 락)
 ✅ Phase 6: PG 인터페이스 설계
 ✅ Phase 7: Payment History 설계
-⬜ Phase 8: 외부 PG 연동
-⬜ Phase 9: 고용주 대시보드 API
-⬜ Phase 10: 동시성 검증 (JMeter)
-⬜ Phase 11: React 프론트엔드 (급여시계 UI)
+✅ Phase 8: PortOne 가상계좌 연동 (발급 + 웹훅 수신)
+⬜ Phase 9: 고용주/근로자 가상계좌 및 디지털 장부
+⬜ Phase 10: 고용주 대시보드 API
+⬜ Phase 11: 동시성 검증 (JMeter)
+⬜ Phase 12: React 프론트엔드 (급여시계 UI)
+```
+
+---
+
+## 수익 모델
+
+```
+선지급 건당 수수료 (근로자 부담)
+고용주는 무료로 선지급 인프라를 제공받고,
+근로자는 월급날 전에 적립 급여에 즉시 접근하는 대신 소액 수수료 부담
 ```
 
 ---
