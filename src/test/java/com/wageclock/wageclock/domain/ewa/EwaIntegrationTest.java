@@ -8,11 +8,15 @@ import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
+import com.wageclock.wageclock.domain.payment.PaymentRepository;
+import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
+import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
 import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.infrastructure.PortOneWebhookPayload;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +26,7 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -32,6 +37,9 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
@@ -50,7 +58,6 @@ public class EwaIntegrationTest {
         registry.add("spring.datasource.password", postgreSQLContainer::getPassword);
         registry.add("spring.data.redis.host", redisContainer::getHost);
         registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
-        registry.add("JWT_SECRET", () -> "wageclock-secret-key-must-be-at-least-256-bits-long");
     }
 
     @Autowired TestRestTemplate testRestTemplate;
@@ -59,13 +66,17 @@ public class EwaIntegrationTest {
     @Autowired EmploymentRepository employmentRepository;
     @Autowired WorkSessionRepository workSessionRepository;
     @Autowired EwaRequestRepository ewaRequestRepository;
+    @Autowired PaymentRepository paymentRepository;
+    @MockitoBean VirtualAccountPort virtualAccountPort;
 
     private String workerToken;
     private String employerToken;
     private Long sessionId;
 
+
     @AfterEach
     void tearDown() {
+        paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
         employmentRepository.deleteAll();
@@ -179,15 +190,18 @@ public class EwaIntegrationTest {
 
     @Test
     void 정상_EWA_승인() {
+        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
+                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
+
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
 
-        ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/approve",
+        ResponseEntity<InitiateEwaResponse> response = testRestTemplate.postForEntity(
+                "/api/ewaRequest/" + ewaId + "/initiateEwa",
                 new HttpEntity<>(null, employerHeaders()),
-                EwaResponseDto.class);
+                InitiateEwaResponse.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, response.getBody().status());
+        assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.getBody().status());
     }
 
     @Test
@@ -205,6 +219,9 @@ public class EwaIntegrationTest {
 
     @Test
     void 다른_고용주_승인_시도_실패() {
+        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
+                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
+
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
 
         testRestTemplate.postForEntity("/api/auth/signup",
@@ -217,7 +234,7 @@ public class EwaIntegrationTest {
         otherHeaders.set("Authorization", "Bearer " + otherToken);
 
         ResponseEntity<Void> response = testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/approve",
+                "/api/ewaRequest/" + ewaId + "/initiateEwa",
                 new HttpEntity<>(null, otherHeaders),
                 Void.class);
 
@@ -225,19 +242,36 @@ public class EwaIntegrationTest {
     }
 
     @Test
-    void PENDING_아닌_요청_승인_실패() {
+    void PENDING_아닌_요청_initiate_실패() {
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
 
-        // 먼저 승인
-        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/approve",
-                new HttpEntity<>(null, employerHeaders()), EwaResponseDto.class);
+        HttpHeaders headers = employerHeaders();
+        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/reject",
+                new HttpEntity<>(null, headers), EwaResponseDto.class);
 
-        // 이미 APPROVED 상태에서 다시 승인 시도
         ResponseEntity<Void> response = testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/approve",
-                new HttpEntity<>(null, employerHeaders()),
+                "/api/ewaRequest/" + ewaId + "/initiateEwa",
+                new HttpEntity<>(null, headers),
                 Void.class);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    void EWA_APPROVE_검증(){
+        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
+                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        HttpHeaders headers = employerHeaders();
+        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
+                new HttpEntity<>(null, headers), InitiateEwaResponse.class);
+        String portOnePaymentId = paymentRepository.findAll().get(0).getPortOnePaymentId();
+        ResponseEntity<Void> webhookResponse = testRestTemplate.postForEntity(
+                "/webhook",
+                new PortOneWebhookPayload("Transaction.Paid", "",
+                        new PortOneWebhookPayload.Data("", portOnePaymentId, "")), Void.class);
+        assertEquals(HttpStatus.OK, webhookResponse.getStatusCode());
+        EwaRequest.EwaRequestStatus status = ewaRequestRepository.findById(ewaId).get().getStatus();
+        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, status);
     }
 }

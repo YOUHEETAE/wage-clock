@@ -34,3 +34,7 @@ build/
 # postman
 .postman/
 postman/
+
+# testProperties
+src/test/resources/application.properties
+
