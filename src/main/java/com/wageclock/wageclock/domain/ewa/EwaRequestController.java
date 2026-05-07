@@ -17,10 +17,10 @@ public class EwaRequestController {
                                   @AuthenticationPrincipal Long workerId) {
         return ewaRequestService.requestEwa(requestDto, workerId);
     }
-    @PostMapping("/{ewaRequestId}/approve")
-    public EwaResponseDto approve(@PathVariable Long ewaRequestId,
+    @PostMapping("/{ewaRequestId}/initiateEwa")
+    public InitiateEwaResponse approve(@PathVariable Long ewaRequestId,
                                   @AuthenticationPrincipal Long employerId) {
-        return ewaRequestService.approveEwa(ewaRequestId, employerId);
+        return ewaRequestService.initiateEwa(ewaRequestId, employerId);
     }
     @PostMapping("/{ewaRequestId}/reject")
     public EwaResponseDto reject(@PathVariable Long ewaRequestId,

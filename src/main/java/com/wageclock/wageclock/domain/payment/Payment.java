@@ -23,6 +23,9 @@ public class Payment extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false,  unique = true)
+    private String portOnePaymentId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(nullable = false, name = "employer_id")
     private Employer employer;
@@ -34,8 +37,14 @@ public class Payment extends BaseEntity {
     @Column(nullable = false)
     private BigDecimal amount;
 
-    @Column(nullable = false, unique = true)
-    private String idempotencyKey;
+    @Column()
+    private String bank;
+
+    @Column()
+    private String accountNumber;
+
+    @Column()
+    private String expiredAt;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -53,11 +62,15 @@ public class Payment extends BaseEntity {
     }
 
     @Builder
-    public Payment (Employer employer, EwaRequest ewaRequest, BigDecimal amount, String idempotencyKey) {
+    public Payment (String portOnePaymentId, Employer employer, EwaRequest ewaRequest, BigDecimal amount,
+                    String bank, String accountNumber, String expiredAt) {
+        this.portOnePaymentId = portOnePaymentId;
         this.employer = employer;
         this.ewaRequest = ewaRequest;
         this.amount = amount;
-        this.idempotencyKey = idempotencyKey;
+        this.bank = bank;
+        this.accountNumber = accountNumber;
+        this.expiredAt = expiredAt;
         this.status = PaymentStatus.READY;
         this.histories.add(new PaymentHistory(this, this.amount, PaymentStatus.READY));
     }
@@ -77,4 +90,9 @@ public class Payment extends BaseEntity {
         return this.ewaRequest.getWorkSession();
     }
 
+    public void updateVirtualAccountInfo(String bank, String accountNumber, String expiredAt){
+        this.bank = bank;
+        this.accountNumber = accountNumber;
+        this.expiredAt = expiredAt;
+    }
 }

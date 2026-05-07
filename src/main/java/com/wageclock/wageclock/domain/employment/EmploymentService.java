@@ -7,6 +7,7 @@ import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EmploymentService {
@@ -23,6 +24,7 @@ public class EmploymentService {
         this.employerRepository = employerRepository;
     }
 
+    @Transactional
     public CreateEmploymentResponse createEmployment(CreateEmploymentRequest createEmploymentRequest, Long employerId){
         Employer employer = employerRepository.findById(employerId)
                 .orElseThrow(() -> new NotFoundException("employer not found"));
