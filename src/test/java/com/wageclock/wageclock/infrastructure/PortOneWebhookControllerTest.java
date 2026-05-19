@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.infrastructure;
 
 import com.wageclock.wageclock.TestSecurityConfig;
-import com.wageclock.wageclock.domain.ewa.PortOneWebhookService;
+import com.wageclock.wageclock.domain.ewa.EwaSettlementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -22,7 +22,7 @@ public class PortOneWebhookControllerTest {
     @Autowired
     private MockMvc mockMvc;
     @MockitoBean
-    PortOneWebhookService portOneWebhookService;
+    EwaSettlementService ewaSettlementService;
     @MockitoBean
     JpaMetamodelMappingContext jpaMetamodelMappingContext;
 

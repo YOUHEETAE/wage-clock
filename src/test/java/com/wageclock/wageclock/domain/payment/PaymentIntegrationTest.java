@@ -75,9 +75,12 @@ public class PaymentIntegrationTest {
     VirtualAccountPort virtualAccountPort;
     @MockitoBean
     PaymentScheduler paymentScheduler;
+    @Autowired
+    EwaTransactionRepository ewaTransactionRepository;
 
     @AfterEach
     void tearDown() {
+        ewaTransactionRepository.deleteAll();
         paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();

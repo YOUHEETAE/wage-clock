@@ -10,6 +10,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "ewa_requests")
@@ -67,4 +69,5 @@ public class EwaRequest extends BaseEntity {
     public String getEmployerName() {
         return this.workSession.getEmployment().getEmployer().getName();
     }
+
 }
