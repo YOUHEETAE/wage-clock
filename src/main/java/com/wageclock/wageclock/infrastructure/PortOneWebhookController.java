@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.infrastructure;
 
 
-import com.wageclock.wageclock.domain.ewa.PortOneWebhookService;
+import com.wageclock.wageclock.domain.ewa.EwaSettlementService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -10,15 +10,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class PortOneWebhookController {
 
-    private final PortOneWebhookService portOneWebhookService;
+    private final EwaSettlementService ewaSettlementService;
 
-    public PortOneWebhookController(PortOneWebhookService portOneWebhookService) {
-        this.portOneWebhookService = portOneWebhookService;
+    public PortOneWebhookController(EwaSettlementService ewaSettlementService) {
+        this.ewaSettlementService = ewaSettlementService;
     }
     @PostMapping("/webhook")
     public ResponseEntity<Void> handleWebhook(@RequestBody PortOneWebhookPayload payload){
         if("Transaction.Paid".equals(payload.type())){
-            portOneWebhookService.approveEwa(payload.data().paymentId());
+            ewaSettlementService.approveEwa(payload.data().paymentId());
         }
        return ResponseEntity.ok().build();
     }
