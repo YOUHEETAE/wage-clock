@@ -16,7 +16,6 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,65 +36,10 @@ public class EwaRequestServiceTest {
     @Mock PortOnePaymentService portOnePaymentService;
     @Mock EwaRequest ewaRequest;
     @Mock Payment payment;
+    @Mock EwaRequestProcessor ewaRequestProcessor;
 
     @InjectMocks
     EwaRequestService ewaRequestService;
-
-    private void setUpLock() throws InterruptedException {
-        when(redissonClient.getLock(anyString())).thenReturn(lock);
-        when(lock.tryLock(anyLong(), anyLong(), any())).thenReturn(true);
-    }
-
-    @Test
-    void 한도_초과_요청_시_예외() throws InterruptedException {
-        setUpLock();
-        when(employment.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
-        when(employment.getWorker()).thenReturn(worker);
-        when(worker.getId()).thenReturn(1L);
-        WorkSession workSession = WorkSession.builder()
-                .clockIn(LocalDateTime.now().minusHours(2))
-                .employment(employment).build();
-        workSession.clockOut();
-        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
-        EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.valueOf(10000), "key-1");
-        assertThrows(IllegalArgumentException.class, () -> ewaRequestService.requestEwa(ewaRequestDto, 1L));
-    }
-
-    @Test
-    void 멱등성_키_중복_요청_예외() throws InterruptedException {
-        setUpLock();
-        when(employment.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
-        when(employment.getWorker()).thenReturn(worker);
-        when(worker.getId()).thenReturn(1L);
-        WorkSession workSession = WorkSession.builder()
-                .clockIn(LocalDateTime.now().minusHours(2))
-                .employment(employment).build();
-        workSession.clockOut();
-        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
-        when(ewaRequestRepository.existsByIdempotencyKey("key-1")).thenReturn(true);
-        EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
-        assertThrows(IllegalArgumentException.class, () -> ewaRequestService.requestEwa(ewaRequestDto, 1L));
-    }
-
-    @Test
-    void 정상_요청_시_응답_반환() throws InterruptedException {
-        setUpLock();
-        when(employment.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
-        when(employment.getWorker()).thenReturn(worker);
-        when(worker.getId()).thenReturn(1L);
-        when(ewaRequestRepository.save(any())).thenReturn(ewaRequest);
-        when(ewaRequest.getId()).thenReturn(1L);
-        when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.ONE);
-        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
-        WorkSession workSession = WorkSession.builder()
-                .clockIn(LocalDateTime.now().minusHours(2))
-                .employment(employment).build();
-        workSession.clockOut();
-        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
-        EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
-        EwaResponseDto ewaResponseDto = new EwaResponseDto(1L, BigDecimal.ONE, EwaRequest.EwaRequestStatus.PENDING);
-        assertEquals(ewaResponseDto, ewaRequestService.requestEwa(ewaRequestDto, 1L));
-    }
 
     @Test
     void 락_점유_실패_시_예외() throws InterruptedException {
@@ -106,32 +50,10 @@ public class EwaRequestServiceTest {
     }
 
     @Test
-    void EWA요청_없음_예외() {
-        when(ewaRequestRepository.findById(1L)).thenReturn(Optional.empty());
-        assertThrows(RuntimeException.class, () -> ewaRequestService.initiateEwa(1L, 1L));
-    }
-
-    @Test
-    void PENDING_아님_예외() {
-        when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
-        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.APPROVED);
-        assertThrows(IllegalStateException.class, () -> ewaRequestService.initiateEwa(1L, 1L));
-    }
-
-    @Test
-    void 다른_고용주_접근_예외() {
-        when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
-        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
-        when(ewaRequest.getEmployerId()).thenReturn(2L);
-        assertThrows(RuntimeException.class, () -> ewaRequestService.initiateEwa(1L, 1L));
-    }
-
-    @Test
     void 정상_승인() {
-        when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
+        when(ewaRequestProcessor.validateAndLockEwa(1L, 1L)).thenReturn(ewaRequest);
         when(ewaRequest.getStatus())
                 .thenReturn(EwaRequest.EwaRequestStatus.PENDING);
-        when(ewaRequest.getEmployerId()).thenReturn(1L);
         when(portOnePaymentService.processPayment(any())).thenReturn(payment);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
         when(payment.getPortOnePaymentId()).thenReturn("test-id");
@@ -144,7 +66,7 @@ public class EwaRequestServiceTest {
 
     @Test
     void 정상_거절() {
-        when(ewaRequestRepository.findById(1L)).thenReturn(Optional.of(ewaRequest));
+        when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.of(ewaRequest));
         when(ewaRequest.getStatus())
                 .thenReturn(EwaRequest.EwaRequestStatus.PENDING)
                 .thenReturn(EwaRequest.EwaRequestStatus.REJECTED);

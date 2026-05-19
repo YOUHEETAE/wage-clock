@@ -5,6 +5,7 @@ import com.wageclock.wageclock.domain.payment.Payment;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -17,7 +18,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class PortOneWebhookServiceTest {
+public class EwaSettlementServiceTest {
     @Mock
     PaymentRepository paymentRepository;
     @Mock
@@ -27,7 +28,11 @@ public class PortOneWebhookServiceTest {
     @Mock
     EwaRequestRepository ewaRequestRepository;
     @InjectMocks
-    PortOneWebhookService portOneWebhookService;
+    EwaSettlementService ewaSettlementService;
+    @Mock
+    EwaTransactionRepository ewaTransactionRepository;
+    @Mock
+    EwaTransaction ewaTransaction;
 
     @Test
     void approveEwa_검증(){
@@ -44,8 +49,13 @@ public class PortOneWebhookServiceTest {
         when(paymentRepository.findByPortOnePaymentId("test-payment-id"))
                 .thenReturn(Optional.of(payment));
 
-        portOneWebhookService.approveEwa("test-payment-id");
+        ewaSettlementService.approveEwa("test-payment-id");
         assertEquals(Payment.PaymentStatus.COMPLETED, payment.getStatus());
         verify(ewaRequest).approved();
+        ArgumentCaptor<EwaTransaction> captor = ArgumentCaptor.captor();
+        verify(ewaTransactionRepository).save(captor.capture());
+        EwaTransaction captured = captor.getValue();
+        assertEquals(payment.getEwaRequest(), captured.getEwaRequest());
+        assertEquals(BigDecimal.valueOf(100), captured.getAmount());
     }
 }

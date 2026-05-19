@@ -33,6 +33,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,6 +70,7 @@ public class EwaIntegrationTest {
     @Autowired EwaRequestRepository ewaRequestRepository;
     @Autowired PaymentRepository paymentRepository;
     @MockitoBean VirtualAccountPort virtualAccountPort;
+    @Autowired EwaTransactionRepository ewaTransactionRepository;
 
     private String workerToken;
     private String employerToken;
@@ -76,6 +79,7 @@ public class EwaIntegrationTest {
 
     @AfterEach
     void tearDown() {
+        ewaTransactionRepository.deleteAll();
         paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
@@ -273,5 +277,9 @@ public class EwaIntegrationTest {
         assertEquals(HttpStatus.OK, webhookResponse.getStatusCode());
         EwaRequest.EwaRequestStatus status = ewaRequestRepository.findById(ewaId).get().getStatus();
         assertEquals(EwaRequest.EwaRequestStatus.APPROVED, status);
+        EwaTransaction ewaTransactions = ewaTransactionRepository.findAll().get(0);
+        assertEquals(1, ewaTransactionRepository.findAll().size());
+        assertEquals(ewaId, ewaTransactions.getEwaRequest().getId());
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(ewaTransactions.getAmount()));
     }
 }

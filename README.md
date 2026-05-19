@@ -45,7 +45,8 @@
                           (실서비스 전환 시 오픈뱅킹 API 연동 필요)
 PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hexagonal Architecture)
 외부 API 트랜잭션 분리 → DB 커넥션 풀 고갈 방지를 위해 외부 API 호출과 @Transactional 분리
-디지털 장부            → 고용주/근로자 가상계좌 잔액 및 트랜잭션 히스토리 관리
+거래 내역 기록         → balance 없이 EwaTransaction으로 거래 이력만 관리
+                          (실서비스 전환 시 오픈뱅킹 API 연동으로 실제 송금 처리)
 ```
 
 ---
@@ -60,7 +61,7 @@ PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hex
   → 요청 금액만큼 고용주에게 가상계좌 발급 (PortOne) — Payment READY → PROCESSING
   → 고용주가 해당 가상계좌에 입금
   → PortOne 웹훅으로 입금 확인 (Transaction.Paid) — Payment COMPLETED, EWA APPROVED
-  → 근로자 가상계좌에 입금 처리 (Mock)
+  → EwaTransaction 기록 (거래 내역 저장)
 ```
 
 ---
@@ -69,13 +70,12 @@ PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hex
 
 ```
 Employer (고용주)
-  └─ EmployerAccount (고용주 가상계좌)
   └─ Employment (고용 관계) ── Worker (근로자)
-                                  └─ WorkerAccount (근로자 가상계좌)
        └─ WorkSession (근무 세션 / 급여시계)
             └─ EwaRequest (선지급 요청)
                  └─ Payment (결제)
-                      └─ PaymentHistory (결제 히스토리)
+                 │    └─ PaymentHistory (결제 히스토리)
+                 └─ EwaTransaction (거래 내역)
 ```
 
 ## ERD
@@ -134,10 +134,12 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 6: PG 인터페이스 설계
 ✅ Phase 7: Payment History 설계
 ✅ Phase 8: PortOne 가상계좌 연동 (발급 + 웹훅 수신)
-⬜ Phase 9: 고용주/근로자 가상계좌 및 디지털 장부
-⬜ Phase 10: 고용주 대시보드 API
-⬜ Phase 11: 동시성 검증 (JMeter)
-⬜ Phase 12: React 프론트엔드 (급여시계 UI)
+✅ Phase 9: EwaTransaction 거래 내역 기록
+⬜ Phase 10: Outbox 패턴 (장애복구 - Scheduler 기반)
+⬜ Phase 11: 고용주 대시보드 API
+⬜ Phase 12: 동시성 검증 (JMeter)
+⬜ Phase 13: Kafka (분산 서버 도입 후 Outbox 처리 주체 교체)
+⬜ Phase 14: React 프론트엔드 (급여시계 UI)
 ```
 
 ---
