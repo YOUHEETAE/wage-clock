@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.payment;
+package com.wageclock.wageclock.domain.outbox;
 
 import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
@@ -9,10 +9,15 @@ import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.ewa.*;
-import com.wageclock.wageclock.domain.outbox.EwaOutBoxEventRepository;
+import com.wageclock.wageclock.domain.payment.PaymentRepository;
+import com.wageclock.wageclock.domain.payment.PaymentScheduler;
+import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
+import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
-import com.wageclock.wageclock.domain.worksession.*;
-import com.wageclock.wageclock.infrastructure.PortOneWebhookPayload;
+import com.wageclock.wageclock.domain.worksession.ClockInRequest;
+import com.wageclock.wageclock.domain.worksession.ClockInResponse;
+import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
+import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +37,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,8 +45,7 @@ import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
-public class PaymentIntegrationTest {
-
+public class OutBoxIntegrationTest {
     @Container
     static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16");
     @Container
@@ -73,12 +76,14 @@ public class PaymentIntegrationTest {
     PaymentRepository paymentRepository;
     @MockitoBean
     VirtualAccountPort virtualAccountPort;
-    @Autowired
+    @MockitoBean
     PaymentScheduler paymentScheduler;
     @Autowired
     EwaTransactionRepository ewaTransactionRepository;
     @Autowired
     EwaOutBoxEventRepository ewaOutBoxEventRepository;
+    @Autowired
+    OutBoxScheduler outBoxScheduler;
 
     @AfterEach
     void tearDown() {
@@ -159,101 +164,32 @@ public class PaymentIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         return response.getBody().ewaRequestId();
     }
-
     @Test
-    void 승인_시_payment_저장_및_ewa_status_APPROVE(){
+    void initiateEwa_성공_시_outBoxEvent_PROCESSED(){
         when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("Toss", "1234", "2026-05-05"));
+                .thenReturn(new VirtualAccountResult("Toss", "1234-1234", "2026-05-24"));
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        ResponseEntity<InitiateEwaResponse> response = testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()), InitiateEwaResponse.class);
-        String portOnePaymentId = paymentRepository.findAll().get(0).getPortOnePaymentId();
-        ResponseEntity<Void> webhookResponse = testRestTemplate.postForEntity(
-                "/webhook",
-                new PortOneWebhookPayload("Transaction.Paid", "",
-                        new PortOneWebhookPayload.Data("", portOnePaymentId, "")), Void.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        List<Payment> payment = paymentRepository.findAllWithHistories();
-        EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).orElseThrow();
-        assertEquals(1, payment.size());
-        assertEquals(3, payment.get(0).getHistories().size());
-        assertEquals(Payment.PaymentStatus.COMPLETED, payment.get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.READY, payment.get(0).getHistories().get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.PROCESSING, payment.get(0).getHistories().get(1).getStatus());
-        assertEquals(Payment.PaymentStatus.COMPLETED, payment.get(0).getHistories().get(2).getStatus());
-        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, ewaRequest.getStatus());
+        testRestTemplate.postForEntity(
+                "/api/ewaRequest/" + ewaId + "/initiateEwa",
+                new HttpEntity<>(employerHeaders()),
+                InitiateEwaResponse.class);
+        EwaOutBoxEvent ewaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
+        assertEquals(EwaOutBoxEvent.OutBoxStatus.PROCESSED, ewaOutBoxEvent.getStatus());
     }
     @Test
-    void 거절_시_EwaRequest_REJECTED_및_EwaAmount_감소(){
-        Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/reject",
-                new HttpEntity<>(employerHeaders()), EwaResponseDto.class);
-        EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).orElseThrow();
-        WorkSession workSession = workSessionRepository.findById(sessionId).orElseThrow();
-        assertEquals(EwaRequest.EwaRequestStatus.REJECTED, ewaRequest.getStatus());
-        assertEquals(0, workSession.getTotalEwaAmount().compareTo(BigDecimal.ZERO));
-    }
-    @Test
-    void 실패_시_payment_저장_및_ewa_status_FAILED(){
+    void initiateEwa_실패_시_outBoxEvent_PENDING(){
         when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("Toss", "1234", "2026-05-05"));
+                .thenThrow(new RuntimeException(""));
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        ResponseEntity<InitiateEwaResponse> response = testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()), InitiateEwaResponse.class);
-        String portOnePaymentId = paymentRepository.findAll().get(0).getPortOnePaymentId();
-        ResponseEntity<Void> webhookResponse = testRestTemplate.postForEntity(
-                "/webhook",
-                new PortOneWebhookPayload("Transaction.Failed", "",
-                        new PortOneWebhookPayload.Data("", portOnePaymentId, "")), Void.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        List<Payment> payment = paymentRepository.findAllWithHistories();
-        EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).orElseThrow();
-        assertEquals(1, payment.size());
-        assertEquals(3, payment.get(0).getHistories().size());
-        assertEquals(Payment.PaymentStatus.FAILED, payment.get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.READY, payment.get(0).getHistories().get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.PROCESSING, payment.get(0).getHistories().get(1).getStatus());
-        assertEquals(Payment.PaymentStatus.FAILED, payment.get(0).getHistories().get(2).getStatus());
-        assertEquals(EwaRequest.EwaRequestStatus.FAILED, ewaRequest.getStatus());
-    }
-    @Test
-    void 스케줄러_PROCESSING_PAID_처리(){
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("Toss", "1234", "2026-05-05"));
-        Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        ResponseEntity<InitiateEwaResponse> response = testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()), InitiateEwaResponse.class);
-        String portOnePaymentId = paymentRepository.findAll().get(0).getPortOnePaymentId();
-        when(virtualAccountPort.getVirtualAccountStatus(portOnePaymentId)).thenReturn("PAID");
-        paymentScheduler.retryPayment();
-        List<Payment> payment = paymentRepository.findAllWithHistories();
-        EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).orElseThrow();
-        assertEquals(1, payment.size());
-        assertEquals(3, payment.get(0).getHistories().size());
-        assertEquals(Payment.PaymentStatus.COMPLETED, payment.get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.READY, payment.get(0).getHistories().get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.PROCESSING, payment.get(0).getHistories().get(1).getStatus());
-        assertEquals(Payment.PaymentStatus.COMPLETED, payment.get(0).getHistories().get(2).getStatus());
-        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, ewaRequest.getStatus());
-    }
-    @Test
-    void 스케줄러_PROCESSING_FAILED_처리(){
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("Toss", "1234", "2026-05-05"));
-        Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        ResponseEntity<InitiateEwaResponse> response = testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()), InitiateEwaResponse.class);
-        String portOnePaymentId = paymentRepository.findAll().get(0).getPortOnePaymentId();
-        when(virtualAccountPort.getVirtualAccountStatus(portOnePaymentId)).thenReturn("FAILED");
-        paymentScheduler.retryPayment();
-        List<Payment> payment = paymentRepository.findAllWithHistories();
-        EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).orElseThrow();
-        assertEquals(1, payment.size());
-        assertEquals(3, payment.get(0).getHistories().size());
-        assertEquals(Payment.PaymentStatus.FAILED, payment.get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.READY, payment.get(0).getHistories().get(0).getStatus());
-        assertEquals(Payment.PaymentStatus.PROCESSING, payment.get(0).getHistories().get(1).getStatus());
-        assertEquals(Payment.PaymentStatus.FAILED, payment.get(0).getHistories().get(2).getStatus());
-        assertEquals(EwaRequest.EwaRequestStatus.FAILED, ewaRequest.getStatus());
+        testRestTemplate.postForEntity(
+                "/api/ewaRequest/" + ewaId + "/initiateEwa",
+                new HttpEntity<>(employerHeaders()),
+                Void.class);
+        EwaOutBoxEvent ewaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
+        assertEquals(EwaOutBoxEvent.OutBoxStatus.PENDING, ewaOutBoxEvent.getStatus());
+        assertEquals(0,ewaOutBoxEvent.getRetryCount());
+        outBoxScheduler.processEwaOutBoxEvent();
+        EwaOutBoxEvent retryEwaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
+        assertEquals(1,retryEwaOutBoxEvent.getRetryCount());
     }
 }

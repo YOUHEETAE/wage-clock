@@ -1,9 +1,6 @@
 package com.wageclock.wageclock.domain.payment;
 
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
-import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.worksession.WorkSession;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.domain.ewa.EwaSettlementService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,29 +10,27 @@ import java.util.List;
 public class PaymentScheduler {
 
     private final PaymentRepository paymentRepository;
-    private final EwaRequestRepository ewaRequestRepository;
-    private final WorkSessionRepository workSessionRepository;
+    private final VirtualAccountPort virtualAccountPort;
+    private final EwaSettlementService ewaSettlementService;
 
     public PaymentScheduler(PaymentRepository paymentRepository,
-                            EwaRequestRepository ewaRequestRepository,
-                            WorkSessionRepository workSessionRepository) {
+                            VirtualAccountPort virtualAccountPort,
+                            EwaSettlementService ewaSettlementService) {
         this.paymentRepository = paymentRepository;
-        this.ewaRequestRepository = ewaRequestRepository;
-        this.workSessionRepository = workSessionRepository;
+        this.virtualAccountPort = virtualAccountPort;
+        this.ewaSettlementService = ewaSettlementService;
     }
     @Scheduled(fixedDelay = 300000)
     public void retryPayment() {
-        List<Payment> payment = paymentRepository.findByStatus(Payment.PaymentStatus.UNKNOWN);
+        List<Payment> payment = paymentRepository.findByStatus(Payment.PaymentStatus.PROCESSING);
         for (Payment pay : payment) {
-            EwaRequest ewaRequest = pay.getEwaRequest();
-            WorkSession workSession = pay.getWorkSession();
-            pay.failed();
-            paymentRepository.save(pay);
-            ewaRequest.rejected();
-            ewaRequestRepository.save(ewaRequest);
-            workSession.subtractEwaAmount(pay.getAmount());
-            workSessionRepository.save(workSession);
+            String portOnePaymentId = pay.getPortOnePaymentId();
+            String status = virtualAccountPort.getVirtualAccountStatus(portOnePaymentId);
+            if(status.equals("PAID")) {
+                ewaSettlementService.approveEwa(portOnePaymentId);
+            }else if(status.equals("FAILED") || status.equals("CANCELLED")) {
+                ewaSettlementService.failEwa(portOnePaymentId);
+            }
         }
     }
-
 }

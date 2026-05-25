@@ -2,6 +2,8 @@ package com.wageclock.wageclock.domain.payment;
 
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.outbox.EwaOutBoxEvent;
+import com.wageclock.wageclock.domain.outbox.EwaOutBoxEventRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -9,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +30,10 @@ public class PortOnePaymentServiceTest {
     Employer employer;
     @Mock
     EwaRequest ewaRequest;
+    @Mock
+    EwaOutBoxEventRepository ewaOutBoxEventRepository;
+    @Mock
+    EwaOutBoxEvent ewaOutBoxEvent;
 
     @Test
     void processPayment_검증() {
@@ -43,6 +50,7 @@ public class PortOnePaymentServiceTest {
 
     @Test
     void updatePayment_검증(){
+        when(ewaOutBoxEventRepository.findByPortOnePaymentId(any())).thenReturn(Optional.of(ewaOutBoxEvent));
         VirtualAccountResult account = new VirtualAccountResult("Toss", "1234", "2026-05-05");
         Payment payment = portOnePaymentService.processPayment(ewaRequest);
         portOnePaymentService.updatePayment(payment, account);

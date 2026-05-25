@@ -10,8 +10,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "ewa_requests")
@@ -49,7 +47,7 @@ public class EwaRequest extends BaseEntity {
         PENDING,
         APPROVED,
         REJECTED,
-        PAID
+        FAILED
     }
 
     public void approved(){
@@ -57,6 +55,9 @@ public class EwaRequest extends BaseEntity {
     }
     public void rejected(){
         this.status = EwaRequestStatus.REJECTED;
+    }
+    public void failed(){
+        this.status = EwaRequestStatus.FAILED;
     }
 
     public Long getEmployerId(){

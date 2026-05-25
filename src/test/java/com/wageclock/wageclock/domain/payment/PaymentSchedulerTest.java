@@ -1,9 +1,6 @@
 package com.wageclock.wageclock.domain.payment;
 
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
-import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.worksession.WorkSession;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.domain.ewa.EwaSettlementService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,9 +8,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,32 +20,36 @@ public class PaymentSchedulerTest {
     @Mock
     Payment payment;
     @Mock
-    EwaRequest ewaRequest;
-    @Mock
-    WorkSession workSession;
-    @Mock
     PaymentRepository  paymentRepository;
     @Mock
-    WorkSessionRepository workSessionRepository;
+    VirtualAccountPort virtualAccountPort;
     @Mock
-    EwaRequestRepository ewaRequestRepository;
+    EwaSettlementService ewaSettlementService;
 
     @InjectMocks
     PaymentScheduler paymentScheduler;
 
     @BeforeEach
     public void setUp() {
-        when(payment.getEwaRequest()).thenReturn(ewaRequest);
-        when(payment.getWorkSession()).thenReturn(workSession);
-        when(payment.getAmount()).thenReturn(BigDecimal.valueOf(1000));
-        when(paymentRepository.findByStatus(Payment.PaymentStatus.UNKNOWN)).thenReturn(List.of(payment));
+        when(paymentRepository.findByStatus(Payment.PaymentStatus.PROCESSING)).thenReturn(List.of(payment));
     }
 
     @Test
-    void UNKNOWN_결제_FAILED_처리(){
+    void PROCESSING_결제_PAID_처리(){
+        when(virtualAccountPort.getVirtualAccountStatus(any())).thenReturn("PAID");
         paymentScheduler.retryPayment();
-        verify(ewaRequest).rejected();
-        verify(payment).failed();
-        verify(workSession).subtractEwaAmount(BigDecimal.valueOf(1000));
+        verify(ewaSettlementService).approveEwa(any());
+    }
+    @Test
+    void PROCESSING_결제_FAILED_처리(){
+        when(virtualAccountPort.getVirtualAccountStatus(any())).thenReturn("FAILED");
+        paymentScheduler.retryPayment();
+        verify(ewaSettlementService).failEwa(any());
+    }
+    @Test
+    void PROCESSING_결제_CANCELLED_처리(){
+        when(virtualAccountPort.getVirtualAccountStatus(any())).thenReturn("CANCELLED");
+        paymentScheduler.retryPayment();
+        verify(ewaSettlementService).failEwa(any());
     }
 }
