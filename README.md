@@ -47,6 +47,9 @@ PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hex
 외부 API 트랜잭션 분리 → DB 커넥션 풀 고갈 방지를 위해 외부 API 호출과 @Transactional 분리
 거래 내역 기록         → balance 없이 EwaTransaction으로 거래 이력만 관리
                           (실서비스 전환 시 오픈뱅킹 API 연동으로 실제 송금 처리)
+장애복구 (Outbox 패턴) → PortOne 가상계좌 발급 실패 시 Scheduler 기반 자동 재시도
+                          (Kafka Consumer로 교체 가능한 구조로 설계)
+장애복구 (결제 조회)   → 웹훅 미수신 시 Scheduler가 PortOne 직접 조회 후 상태 반영
 ```
 
 ---
@@ -135,7 +138,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 7: Payment History 설계
 ✅ Phase 8: PortOne 가상계좌 연동 (발급 + 웹훅 수신)
 ✅ Phase 9: EwaTransaction 거래 내역 기록
-⬜ Phase 10: Outbox 패턴 (장애복구 - Scheduler 기반)
+✅ Phase 10: Outbox 패턴 (장애복구 - Scheduler 기반)
 ⬜ Phase 11: 고용주 대시보드 API
 ⬜ Phase 12: 동시성 검증 (JMeter)
 ⬜ Phase 13: Kafka (분산 서버 도입 후 Outbox 처리 주체 교체)

@@ -57,8 +57,7 @@ public class Payment extends BaseEntity {
         READY,
         COMPLETED,
         FAILED,
-        PROCESSING,
-        UNKNOWN
+        PROCESSING
     }
 
     @Builder
@@ -83,7 +82,6 @@ public class Payment extends BaseEntity {
     public void completed() { changeStatus(PaymentStatus.COMPLETED); }
     public void failed() { changeStatus(PaymentStatus.FAILED); }
     public void processing() { changeStatus(PaymentStatus.PROCESSING); }
-    public void unknown() { changeStatus(PaymentStatus.UNKNOWN); }
 
 
     public WorkSession getWorkSession(){

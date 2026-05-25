@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,7 +28,7 @@ public class PortOneWebhookControllerTest {
     JpaMetamodelMappingContext jpaMetamodelMappingContext;
 
     @Test
-    void webhook_수신_성공()  throws Exception {
+    void webhook_PAID_수신_성공()  throws Exception {
         String payload = """
               {
                 "type": "Transaction.Paid",
@@ -43,6 +44,45 @@ public class PortOneWebhookControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andExpect(status().isOk());
+        verify(ewaSettlementService).approveEwa("test-payment-id");
+    }
+    @Test
+    void webhook_CANCELLED_수신_성공()  throws Exception {
+        String payload = """
+              {
+                "type": "Transaction.Cancelled",
+                "timestamp": "2024-04-25T10:00:00.000Z",
+                "data": {
+                  "storeId": "test-store",
+                  "paymentId": "test-payment-id",
+                  "transactionId": "test-transaction-id"
+                }
+              }
+              """;
+        mockMvc.perform(post("/webhook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk());
+        verify(ewaSettlementService).failEwa("test-payment-id");
+    }
+    @Test
+    void webhook_FAILED_수신_성공()  throws Exception {
+        String payload = """
+              {
+                "type": "Transaction.Failed",
+                "timestamp": "2024-04-25T10:00:00.000Z",
+                "data": {
+                  "storeId": "test-store",
+                  "paymentId": "test-payment-id",
+                  "transactionId": "test-transaction-id"
+                }
+              }
+              """;
+        mockMvc.perform(post("/webhook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk());
+        verify(ewaSettlementService).failEwa("test-payment-id");
     }
     @Test
     void non_Transaction_Paid_타입_무시() throws Exception {
