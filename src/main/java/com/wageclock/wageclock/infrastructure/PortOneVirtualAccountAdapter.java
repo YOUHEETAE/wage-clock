@@ -20,4 +20,8 @@ public class PortOneVirtualAccountAdapter implements VirtualAccountPort {
         PortOneVirtualAccountInfoResponse info = portOneService.getVirtualAccountInfo(portOnePaymentId);
         return new VirtualAccountResult(info.method().bank(), info.method().accountNumber(), info.method().expiredAt());
     }
+    public String getVirtualAccountStatus(String portOnePaymentId) {
+        PortOneVirtualAccountInfoResponse info = portOneService.getVirtualAccountInfo(portOnePaymentId);
+        return info.status();
+    }
 }

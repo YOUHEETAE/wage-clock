@@ -1,6 +1,9 @@
 package com.wageclock.wageclock.domain.payment;
 
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.outbox.EwaOutBoxEvent;
+import com.wageclock.wageclock.domain.outbox.EwaOutBoxEventRepository;
+import com.wageclock.wageclock.global.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,10 +15,13 @@ public class PortOnePaymentService implements PaymentService{
 
     private final PaymentRepository paymentRepository;
     private final VirtualAccountPort  virtualAccountPort;
+    private final EwaOutBoxEventRepository ewaOutBoxEventRepository;
 
-    public PortOnePaymentService(PaymentRepository paymentRepository, VirtualAccountPort virtualAccountPort) {
+    public PortOnePaymentService(PaymentRepository paymentRepository, VirtualAccountPort virtualAccountPort,
+                                 EwaOutBoxEventRepository ewaOutBoxEventRepository) {
         this.paymentRepository = paymentRepository;
         this.virtualAccountPort = virtualAccountPort;
+        this.ewaOutBoxEventRepository = ewaOutBoxEventRepository;
     }
 
     @Transactional
@@ -28,6 +34,13 @@ public class PortOnePaymentService implements PaymentService{
                 .amount(ewaRequest.getRequestedAmount())
                 .build();
         paymentRepository.save(payment);
+        EwaOutBoxEvent outBoxEvent = EwaOutBoxEvent.builder()
+                .ewaRequestId(ewaRequest.getId())
+                .portOnePaymentId(portOnePaymentId)
+                .amount(payment.getAmount())
+                .employerName(ewaRequest.getEmployerName())
+                .build();
+        ewaOutBoxEventRepository.save(outBoxEvent);
         return payment;
     }
 
@@ -42,5 +55,10 @@ public class PortOnePaymentService implements PaymentService{
         payment.updateVirtualAccountInfo(account.bank(), account.accountNumber(), account.expiredAt());
         payment.processing();
         paymentRepository.save(payment);
+
+        EwaOutBoxEvent event = ewaOutBoxEventRepository.findByPortOnePaymentId(payment.getPortOnePaymentId())
+                .orElseThrow(() -> new NotFoundException("OutBoxEvent not found"));
+        event.processed();
+        ewaOutBoxEventRepository.save(event);
     }
 }

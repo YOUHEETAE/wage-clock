@@ -77,11 +77,11 @@ public class PortOneService {
                     + e.getResponseBodyAsString());
         }
     }
-    public PortOneVirtualAccountInfoResponse getVirtualAccountInfo(String paymentId) {
+    public PortOneVirtualAccountInfoResponse getVirtualAccountInfo(String portOnePaymentId) {
         PortOneTokenResponseToken token = getAccessToken();
         try{
             PortOneVirtualAccountInfoResponse info = restClient.get()
-                    .uri("/payments/{paymentId}", paymentId)
+                    .uri("/payments/{paymentId}", portOnePaymentId)
                     .header("Authorization", "Bearer " + token.accessToken())
                     .retrieve()
                     .body(PortOneVirtualAccountInfoResponse.class);
