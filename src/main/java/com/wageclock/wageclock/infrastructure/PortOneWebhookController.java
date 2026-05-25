@@ -19,6 +19,8 @@ public class PortOneWebhookController {
     public ResponseEntity<Void> handleWebhook(@RequestBody PortOneWebhookPayload payload){
         if("Transaction.Paid".equals(payload.type())){
             ewaSettlementService.approveEwa(payload.data().paymentId());
+        }else if("Transaction.Cancelled".equals(payload.type()) || "Transaction.Failed".equals(payload.type())){
+            ewaSettlementService.failEwa(payload.data().paymentId());
         }
        return ResponseEntity.ok().build();
     }

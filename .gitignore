@@ -35,6 +35,9 @@ build/
 .postman/
 postman/
 
+# localProperties
+src/main/resources/application-local.properties
+
 # testProperties
 src/test/resources/application.properties
 

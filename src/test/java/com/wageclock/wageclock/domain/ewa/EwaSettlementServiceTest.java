@@ -3,6 +3,8 @@ package com.wageclock.wageclock.domain.ewa;
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.payment.Payment;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
+import com.wageclock.wageclock.domain.worksession.WorkSession;
+import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -33,6 +35,10 @@ public class EwaSettlementServiceTest {
     EwaTransactionRepository ewaTransactionRepository;
     @Mock
     EwaTransaction ewaTransaction;
+    @Mock
+    WorkSession workSession;
+    @Mock
+    WorkSessionRepository workSessionRepository;
 
     @Test
     void approveEwa_검증(){
@@ -57,5 +63,24 @@ public class EwaSettlementServiceTest {
         EwaTransaction captured = captor.getValue();
         assertEquals(payment.getEwaRequest(), captured.getEwaRequest());
         assertEquals(BigDecimal.valueOf(100), captured.getAmount());
+    }
+    @Test
+    void failEwa_검증(){
+        Payment payment = Payment.builder()
+                .portOnePaymentId("test-payment-id")
+                .employer(employer)
+                .ewaRequest(ewaRequest)
+                .amount(BigDecimal.valueOf(100))
+                .bank("SHINHAN")
+                .accountNumber("123456")
+                .expiredAt("2026-05-07")
+                .build();
+        when(ewaRequest.getWorkSession()).thenReturn(workSession);
+        when(paymentRepository.findByPortOnePaymentId("test-payment-id"))
+                .thenReturn(Optional.of(payment));
+        ewaSettlementService.failEwa("test-payment-id");
+        assertEquals(Payment.PaymentStatus.FAILED, payment.getStatus());
+        verify(workSession).subtractEwaAmount(BigDecimal.valueOf(100));
+        verify(ewaRequest).failed();
     }
 }
