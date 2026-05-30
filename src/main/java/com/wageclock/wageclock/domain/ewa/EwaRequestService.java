@@ -1,8 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.payment.*;
-import com.wageclock.wageclock.domain.worksession.WorkSession;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import com.wageclock.wageclock.global.exception.TooManyRequestsException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
@@ -11,23 +10,21 @@ import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
 public class EwaRequestService {
 
-    private final WorkSessionRepository workSessionRepository;
     private final EwaRequestRepository ewaRequestRepository;
     private final RedissonClient redissonClient;
     private final PortOnePaymentService portOnePaymentService;
     private final EwaRequestProcessor  ewaRequestProcessor;
+    private final PayPeriodRepository payPeriodRepository;
 
-    public EwaRequestService(WorkSessionRepository workSessionRepository,
+    public EwaRequestService(PayPeriodRepository payPeriodRepository,
                              EwaRequestRepository ewaRequestRepository, RedissonClient redissonClient,
                              PortOnePaymentService portOnePaymentService, EwaRequestProcessor  ewaRequestProcessor) {
-        this.workSessionRepository = workSessionRepository;
+        this.payPeriodRepository = payPeriodRepository;
         this.ewaRequestRepository = ewaRequestRepository;
         this.redissonClient = redissonClient;
         this.portOnePaymentService = portOnePaymentService;
@@ -74,8 +71,8 @@ public class EwaRequestService {
         }
         ewaRequest.rejected();
         ewaRequestRepository.save(ewaRequest);
-        ewaRequest.getWorkSession().subtractEwaAmount(ewaRequest.getRequestedAmount());
-        workSessionRepository.save(ewaRequest.getWorkSession());
+        ewaRequest.getPayPeriod().subtractEwaAmount(ewaRequest.getRequestedAmount());
+        payPeriodRepository.save(ewaRequest.getPayPeriod());
 
         return new EwaResponseDto(ewaRequestId, ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
     }

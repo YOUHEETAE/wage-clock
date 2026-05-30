@@ -11,6 +11,7 @@ import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
 import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
 import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
@@ -33,8 +34,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,12 +68,13 @@ public class EwaIntegrationTest {
     @Autowired WorkSessionRepository workSessionRepository;
     @Autowired EwaRequestRepository ewaRequestRepository;
     @Autowired PaymentRepository paymentRepository;
+    @Autowired PayPeriodRepository payPeriodRepository;
     @MockitoBean VirtualAccountPort virtualAccountPort;
     @Autowired EwaTransactionRepository ewaTransactionRepository;
 
     private String workerToken;
     private String employerToken;
-    private Long sessionId;
+    private Long employmentId;
 
 
     @AfterEach
@@ -83,6 +83,7 @@ public class EwaIntegrationTest {
         paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
+        payPeriodRepository.deleteAll();
         employmentRepository.deleteAll();
         workerRepository.deleteAll();
         employerRepository.deleteAll();
@@ -111,7 +112,7 @@ public class EwaIntegrationTest {
                 "/api/employment",
                 new HttpEntity<>(new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
                 CreateEmploymentResponse.class);
-        Long employmentId = employmentResponse.getBody().employmentId();
+        this.employmentId = employmentResponse.getBody().employmentId();
 
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
@@ -120,15 +121,12 @@ public class EwaIntegrationTest {
                 "/api/worksession/clockIn",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders),
                 ClockInResponse.class);
-        sessionId = clockInResponse.getBody().sessionId();
+        Long sessionId = clockInResponse.getBody().sessionId();
 
         // 2초 대기 → 약 2,000원 적립 → 한도 약 600원
         Thread.sleep(2000);
-
-        testRestTemplate.postForEntity(
-                "/api/worksession/clockOut",
-                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders),
-                Void.class);
+        testRestTemplate.postForEntity("/api/worksession/clockOut",
+                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders), Void.class);
     }
 
     private HttpHeaders workerHeaders() {
@@ -144,7 +142,7 @@ public class EwaIntegrationTest {
     }
 
     private Long requestEwa(BigDecimal amount) {
-        EwaRequestDto requestDto = new EwaRequestDto(sessionId, amount, UUID.randomUUID().toString());
+        EwaRequestDto requestDto = new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString());
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
                 "/api/ewaRequest/request",
                 new HttpEntity<>(requestDto, workerHeaders()),
@@ -155,7 +153,7 @@ public class EwaIntegrationTest {
 
     @Test
     void 정상_EWA_요청() {
-        EwaRequestDto requestDto = new EwaRequestDto(sessionId, BigDecimal.valueOf(100), UUID.randomUUID().toString());
+        EwaRequestDto requestDto = new EwaRequestDto(employmentId, BigDecimal.valueOf(100), UUID.randomUUID().toString());
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
                 "/api/ewaRequest/request",
                 new HttpEntity<>(requestDto, workerHeaders()),
@@ -168,7 +166,7 @@ public class EwaIntegrationTest {
 
     @Test
     void 한도_초과_EWA_요청_실패() {
-        EwaRequestDto requestDto = new EwaRequestDto(sessionId, BigDecimal.valueOf(10000), UUID.randomUUID().toString());
+        EwaRequestDto requestDto = new EwaRequestDto(employmentId, BigDecimal.valueOf(10000), UUID.randomUUID().toString());
         ResponseEntity<Void> response = testRestTemplate.postForEntity(
                 "/api/ewaRequest/request",
                 new HttpEntity<>(requestDto, workerHeaders()),
@@ -180,13 +178,13 @@ public class EwaIntegrationTest {
     @Test
     void 멱등성_키_중복_요청_실패() {
         String key = UUID.randomUUID().toString();
-        EwaRequestDto requestDto = new EwaRequestDto(sessionId, BigDecimal.valueOf(100), key);
+        EwaRequestDto requestDto = new EwaRequestDto(employmentId, BigDecimal.valueOf(100), key);
         testRestTemplate.postForEntity("/api/ewaRequest/request",
                 new HttpEntity<>(requestDto, workerHeaders()), EwaResponseDto.class);
 
         ResponseEntity<Void> response = testRestTemplate.postForEntity(
                 "/api/ewaRequest/request",
-                new HttpEntity<>(new EwaRequestDto(sessionId, BigDecimal.valueOf(100), key), workerHeaders()),
+                new HttpEntity<>(new EwaRequestDto(employmentId, BigDecimal.valueOf(100), key), workerHeaders()),
                 Void.class);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
@@ -281,5 +279,15 @@ public class EwaIntegrationTest {
         assertEquals(1, ewaTransactionRepository.findAll().size());
         assertEquals(ewaId, ewaTransactions.getEwaRequest().getId());
         assertEquals(0, BigDecimal.valueOf(100).compareTo(ewaTransactions.getAmount()));
+    }
+    @Test
+    void 거절_후_한도_복구_재요청_성공(){
+        Long ewaId = requestEwa(BigDecimal.valueOf(500));
+
+        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/reject",
+                new HttpEntity<>(null, employerHeaders()), Void.class);
+
+        Long newEwaId = requestEwa(BigDecimal.valueOf(500));
+        assertNotNull(newEwaId);
     }
 }

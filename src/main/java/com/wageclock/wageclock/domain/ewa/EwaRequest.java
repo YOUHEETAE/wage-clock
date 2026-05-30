@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.employer.Employer;
-import com.wageclock.wageclock.domain.worksession.WorkSession;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -22,8 +22,8 @@ public class EwaRequest extends BaseEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "work_session_id")
-    private WorkSession workSession;
+    @JoinColumn(name = "pay_period_id")
+    private PayPeriod payPeriod;
 
     @Column(nullable = false)
     private BigDecimal requestedAmount;
@@ -36,8 +36,8 @@ public class EwaRequest extends BaseEntity {
     private EwaRequestStatus status;
 
     @Builder
-    public EwaRequest(WorkSession workSession, BigDecimal requestedAmount, String idempotencyKey){
-        this.workSession = workSession;
+    public EwaRequest(PayPeriod payPeriod, BigDecimal requestedAmount, String idempotencyKey){
+        this.payPeriod = payPeriod;
         this.requestedAmount = requestedAmount;
         this.idempotencyKey = idempotencyKey;
         this.status = EwaRequestStatus.PENDING;
@@ -61,14 +61,14 @@ public class EwaRequest extends BaseEntity {
     }
 
     public Long getEmployerId(){
-        return workSession.getEmployment().getEmployer().getId();
+        return payPeriod.getEmployment().getEmployer().getId();
     }
     public Employer getEmployer() {
-        return this.workSession.getEmployment().getEmployer();
+        return this.payPeriod.getEmployment().getEmployer();
     }
 
     public String getEmployerName() {
-        return this.workSession.getEmployment().getEmployer().getName();
+        return this.payPeriod.getEmployment().getEmployer().getName();
     }
 
 }

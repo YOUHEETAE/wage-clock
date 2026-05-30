@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.outbox;
+package com.wageclock.wageclock.domain.payperiod;
 
 import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
@@ -8,12 +8,12 @@ import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.ewa.*;
+import com.wageclock.wageclock.domain.ewa.EwaRequestDto;
+import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
+import com.wageclock.wageclock.domain.ewa.EwaResponseDto;
+import com.wageclock.wageclock.domain.ewa.EwaTransactionRepository;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
-import com.wageclock.wageclock.domain.payment.PaymentScheduler;
 import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
-import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
-import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
@@ -41,16 +41,15 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
-public class OutBoxIntegrationTest {
+public class PayPeriodIntegrationTest {
     @Container
     static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16");
     @Container
-    static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+    static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7-alpine")
+            .withExposedPorts(6379);
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -75,23 +74,21 @@ public class OutBoxIntegrationTest {
     EwaRequestRepository ewaRequestRepository;
     @Autowired
     PaymentRepository paymentRepository;
+    @Autowired PayPeriodRepository payPeriodRepository;
     @MockitoBean
     VirtualAccountPort virtualAccountPort;
-    @MockitoBean
-    PaymentScheduler paymentScheduler;
     @Autowired
     EwaTransactionRepository ewaTransactionRepository;
-    @Autowired
-    EwaOutBoxEventRepository ewaOutBoxEventRepository;
-    @Autowired
-    OutBoxScheduler outBoxScheduler;
-    @Autowired
-    PayPeriodRepository payPeriodRepository;
+
+    private String workerToken;
+    private String employerToken;
+    private Long employmentId;
+    private Long sessionId;
+
 
     @AfterEach
     void tearDown() {
         ewaTransactionRepository.deleteAll();
-        ewaOutBoxEventRepository.deleteAll();
         paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
@@ -101,24 +98,20 @@ public class OutBoxIntegrationTest {
         employerRepository.deleteAll();
     }
 
-    String employerToken;
-    String workerToken;
-    Long employmentId;
-
     @BeforeEach
     void setUp() throws InterruptedException {
         testRestTemplate.postForEntity("/api/auth/signup",
-                new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER)
-                , Void.class);
+                new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
         testRestTemplate.postForEntity("/api/auth/signup",
-                new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER),
-                Void.class);
+                new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
+
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
-                new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER)
-                , LoginResponse.class).getBody().token();
+                        new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER), LoginResponse.class)
+                .getBody().token();
         workerToken = testRestTemplate.postForEntity("/api/auth/login",
-                new LoginRequest("worker@test.com", "password", UserRole.WORKER)
-                , LoginResponse.class).getBody().token();
+                        new LoginRequest("worker@test.com", "password", UserRole.WORKER), LoginResponse.class)
+                .getBody().token();
+
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
 
         // 시급 3,600,000 → 1초당 1,000원 적립
@@ -137,16 +130,14 @@ public class OutBoxIntegrationTest {
                 "/api/worksession/clockIn",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders),
                 ClockInResponse.class);
-        Long sessionId = clockInResponse.getBody().sessionId();
+        this.sessionId = clockInResponse.getBody().sessionId();
 
         // 2초 대기 → 약 2,000원 적립 → 한도 약 600원
         Thread.sleep(2000);
-
-        testRestTemplate.postForEntity(
-                "/api/worksession/clockOut",
-                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders),
-                Void.class);
+        testRestTemplate.postForEntity("/api/worksession/clockOut",
+                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders), Void.class);
     }
+
     private HttpHeaders workerHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + workerToken);
@@ -169,31 +160,41 @@ public class OutBoxIntegrationTest {
         return response.getBody().ewaRequestId();
     }
     @Test
-    void initiateEwa_성공_시_outBoxEvent_PROCESSED(){
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("Toss", "1234-1234", "2026-05-24"));
-        Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()),
-                InitiateEwaResponse.class);
-        EwaOutBoxEvent ewaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
-        assertEquals(EwaOutBoxEvent.OutBoxStatus.PROCESSED, ewaOutBoxEvent.getStatus());
+    void WORKING_상태_workSession_존재_시_예외(){
+        testRestTemplate.postForEntity("/api/worksession/clockIn",
+                new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), Void.class);
+        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
+                "/api/payperiod/" + employmentId + "/close",
+                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
     @Test
-    void initiateEwa_실패_시_outBoxEvent_PENDING(){
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenThrow(new RuntimeException(""));
-        Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()),
-                Void.class);
-        EwaOutBoxEvent ewaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
-        assertEquals(EwaOutBoxEvent.OutBoxStatus.PENDING, ewaOutBoxEvent.getStatus());
-        assertEquals(0,ewaOutBoxEvent.getRetryCount());
-        outBoxScheduler.processEwaOutBoxEvent();
-        EwaOutBoxEvent retryEwaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
-        assertEquals(1,retryEwaOutBoxEvent.getRetryCount());
+    void PAUSED_상태_workSession_존재_시_예외(){
+        testRestTemplate.postForEntity("/api/worksession/clockIn",
+                new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), Void.class);
+        testRestTemplate.postForEntity("/api/worksession/pause",
+                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders()), Void.class);
+        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
+                "/api/payperiod/" + employmentId + "/close",
+                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+    @Test
+    void 다른_고용주_close_요청_시_예외(){
+        Long otherEmploymentId = 3L;
+        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
+                "/api/payperiod/" + otherEmploymentId + "/close",
+                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+    }
+    @Test
+    void 정상_close_검증(){
+        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
+                "/api/payperiod/" + employmentId + "/close",
+                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        PayPeriod payPeriod = payPeriodRepository.findAll().get(0);
+        assertEquals(PayPeriod.PayPeriodStatus.CLOSED, payPeriod.getStatus());
+        assertEquals(0, response.getBody().actualPayAmount().compareTo(BigDecimal.valueOf(2000)));
     }
 }

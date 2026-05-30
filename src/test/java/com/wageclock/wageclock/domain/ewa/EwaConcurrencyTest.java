@@ -8,10 +8,12 @@ import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.domain.worksession.WorkSessionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,15 +74,20 @@ public class EwaConcurrencyTest {
     WorkSessionRepository workSessionRepository;
     @Autowired
     EwaRequestRepository ewaRequestRepository;
+    @Autowired
+    PayPeriodRepository payPeriodRepository;
+    @Autowired
+    WorkSessionService workSessionService;
 
     private String workerToken;
-    private Long sessionId;
+    private Long employmentId;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @AfterEach
     void tearDown() {
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
+        payPeriodRepository.deleteAll();
         employmentRepository.deleteAll();
         workerRepository.deleteAll();
         employerRepository.deleteAll();
@@ -112,17 +119,19 @@ public class EwaConcurrencyTest {
                 new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders);
         ResponseEntity<CreateEmploymentResponse> employmentResponse = restTemplate.postForEntity(
                 base + "/api/employment", employmentRequest, CreateEmploymentResponse.class);
-        Long employmentId = employmentResponse.getBody().employmentId();
+        this.employmentId = employmentResponse.getBody().employmentId();
 
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
         HttpEntity<ClockInRequest> clockInRequest = new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders);
-        ResponseEntity<ClockInResponse> clockInResponse = restTemplate.postForEntity(
-                base + "/api/worksession/clockIn", clockInRequest, ClockInResponse.class);
-        sessionId = clockInResponse.getBody().sessionId();
+        HttpEntity<ClockInResponse> response = restTemplate.
+                postForEntity(base + "/api/worksession/clockIn", clockInRequest, ClockInResponse.class);
+
+        Long sessionId = response.getBody().sessionId();
 
         // 1초 대기 → 약 1,000원 적립, 한도 약 300원
         Thread.sleep(1000);
+        workSessionService.pause(sessionId, employmentId);
     }
 
     @Test
@@ -142,7 +151,7 @@ public class EwaConcurrencyTest {
             futures.add(executor.submit(() -> {
                 try {
                     latch.await();
-                    EwaRequestDto requestDto = new EwaRequestDto(sessionId, BigDecimal.valueOf(300), UUID.randomUUID().toString());
+                    EwaRequestDto requestDto = new EwaRequestDto(employmentId, BigDecimal.valueOf(300), UUID.randomUUID().toString());
                     HttpEntity<EwaRequestDto> request = new HttpEntity<>(requestDto, headers);
                     ResponseEntity<EwaResponseDto> response = restTemplate.postForEntity(
                             base + "/api/ewaRequest/request", request, EwaResponseDto.class);

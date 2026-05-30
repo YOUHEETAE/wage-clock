@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.worksession;
 
 import com.wageclock.wageclock.domain.employment.Employment;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,8 @@ public class WorkSessionTest {
 
     @Mock
     Employment employment;
+    @Mock
+    PayPeriod payPeriod;
 
     @BeforeEach
     public void setup() {
@@ -54,16 +57,72 @@ public class WorkSessionTest {
         workSession.clockOut();
         assertThrows(IllegalStateException.class, workSession::clockOut);
     }
-
     @Test
-    void 선지급_한도_계산(){
+    void pause_시_PAUSED_상태(){
         WorkSession workSession = WorkSession.builder()
                 .employment(employment)
-                .clockIn(LocalDateTime.now().minusHours(2))
+                .clockIn(LocalDateTime.now())
                 .build();
-        workSession.clockOut();
-        BigDecimal ewaLimit = workSession.getRemainingEwaLimit();
-        assertEquals(0, ewaLimit.compareTo(workSession.getEarnedAmount().multiply(BigDecimal.valueOf(0.3))));
+        workSession.pause();
+        assertEquals(WorkSession.WorkSessionStatus.PAUSED, workSession.getStatus());
+        assertTrue(workSession.isPaused());
+    }
+    @Test
+    void resume_시_WORKING_상태(){
+        WorkSession workSession = WorkSession.builder()
+                .employment(employment)
+                .clockIn(LocalDateTime.now())
+                .build();
+        workSession.resume();
+        assertEquals(WorkSession.WorkSessionStatus.WORKING, workSession.getStatus());
+        assertFalse(workSession.isPaused());
+    }
+    @Test
+    void pause_후_earnedAmount_스냅샷_저장() throws InterruptedException {
+        WorkSession workSession = WorkSession.builder()
+                .employment(employment)
+                .payPeriod(payPeriod)
+                .clockIn(LocalDateTime.now())
+                .build();
+
+        Thread.sleep(1100);
+        workSession.pause();
+
+        assertTrue(workSession.getEarnedAmount().compareTo(BigDecimal.ZERO) > 0);
+        assertEquals(WorkSession.WorkSessionStatus.PAUSED, workSession.getStatus());
     }
 
+    @Test
+    void resume_후_누적_검증() throws InterruptedException {
+        WorkSession workSession = WorkSession.builder()
+                .employment(employment)
+                .payPeriod(payPeriod)
+                .clockIn(LocalDateTime.now())
+                .build();
+
+        Thread.sleep(1100);
+        workSession.pause();
+        BigDecimal firstSnapshot = workSession.getEarnedAmount();
+
+        workSession.resume();
+        Thread.sleep(1100);
+        workSession.pause();
+
+        assertTrue(workSession.getEarnedAmount().compareTo(firstSnapshot) > 0);
+    }
+
+    @Test
+    void paused_상태에서_getCurrentEarnedAmount_스냅샷_반환() throws InterruptedException {
+        WorkSession workSession = WorkSession.builder()
+                .employment(employment)
+                .payPeriod(payPeriod)
+                .clockIn(LocalDateTime.now())
+                .build();
+        Thread.sleep(100);
+        workSession.pause();
+        BigDecimal snapshot = workSession.getEarnedAmount();
+
+        Thread.sleep(100);
+        assertEquals(0, snapshot.compareTo(workSession.getCurrentEarnedAmount()));
+    }
 }
