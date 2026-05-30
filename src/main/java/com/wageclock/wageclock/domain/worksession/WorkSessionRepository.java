@@ -13,7 +13,6 @@ import java.util.Optional;
 @Repository
 public interface WorkSessionRepository extends JpaRepository<WorkSession, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT w FROM WorkSession w WHERE w.id = :id")
-    Optional<WorkSession> findByIdWithLock(@Param("id") Long id);
-    boolean  existsByEmploymentIdAndStatus(Long employmentId, WorkSession.WorkSessionStatus status);
+    boolean existsByEmploymentIdAndStatus(Long employmentId, WorkSession.WorkSessionStatus status);
+    Optional<WorkSession> findByEmploymentIdAndStatus(Long employmentId, WorkSession.WorkSessionStatus status);
 }

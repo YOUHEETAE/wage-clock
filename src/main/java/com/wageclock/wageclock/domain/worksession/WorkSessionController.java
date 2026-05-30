@@ -25,4 +25,16 @@ public class WorkSessionController {
                                       @AuthenticationPrincipal Long workerId) {
         return workSessionService.clockOut(clockOutRequest, workerId);
     }
+    @PostMapping("/pause")
+    public void pause(@RequestBody ClockOutRequest clockOutRequest,
+                      @AuthenticationPrincipal Long workerId){
+        Long sessionId = clockOutRequest.sessionId();
+        workSessionService.pause(sessionId, workerId);
+    }
+    @PostMapping("/resume")
+    public void resume(@RequestBody ClockOutRequest clockOutRequest,
+                       @AuthenticationPrincipal Long workerId){
+        Long sessionId = clockOutRequest.sessionId();
+        workSessionService.resume(sessionId, workerId);
+    }
 }

@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.worksession;
 
 import com.wageclock.wageclock.domain.employment.Employment;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -27,6 +28,10 @@ public class WorkSession extends BaseEntity {
     @JoinColumn(name = "employment_id", nullable = false)
     private Employment employment;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pay_period_id", nullable = false)
+    private PayPeriod payPeriod;
+
     @Column(nullable = false)
     private BigDecimal hourlyWage;
 
@@ -40,23 +45,20 @@ public class WorkSession extends BaseEntity {
     private BigDecimal earnedAmount;
 
     @Column(nullable = false)
-    private BigDecimal totalEwaAmount;
-
-    @Column(nullable = false)
-    private Long pausedDuration;
+    private LocalDateTime lastResumeAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private WorkSessionStatus status;
 
     @Builder
-    public WorkSession(Employment employment, LocalDateTime clockIn){
+    public WorkSession(Employment employment, PayPeriod payPeriod, LocalDateTime clockIn){
         this.employment = employment;
+        this.payPeriod = payPeriod;
         this.clockIn = clockIn;
         this.hourlyWage = employment.getHourlyWage();
         this.earnedAmount = BigDecimal.ZERO;
-        this.totalEwaAmount = BigDecimal.ZERO;
-        this.pausedDuration = 0L;
+        this.lastResumeAt = LocalDateTime.now();
         this.status = WorkSessionStatus.WORKING;
     }
 
@@ -79,26 +81,29 @@ public class WorkSession extends BaseEntity {
         return status == WorkSessionStatus.COMPLETED;
     }
 
-    public BigDecimal getRemainingEwaLimit() {
-        return getCurrentEarnedAmount().multiply(BigDecimal.valueOf(0.3)).subtract(this.totalEwaAmount);
+    public boolean isPaused(){ return status == WorkSessionStatus.PAUSED; }
+
+    public boolean isWorking(){
+        return status == WorkSessionStatus.WORKING;
     }
 
     public BigDecimal getCurrentEarnedAmount() {
-        if(isCompleted()) return this.earnedAmount;
-        BigDecimal seconds = BigDecimal.valueOf(Duration.between(clockIn, LocalDateTime.now()).toSeconds());
-        return hourlyWage.multiply(seconds).divide(BigDecimal.valueOf(3600), 2, RoundingMode.HALF_UP);
-    }
-
-    public void addEwaAmount(BigDecimal amount) {
-        this.totalEwaAmount = this.totalEwaAmount.add(amount);
-    }
-
-    public void subtractEwaAmount(BigDecimal amount) {
-        this.totalEwaAmount = this.totalEwaAmount.subtract(amount);
+        if(isCompleted() || isPaused()) return this.earnedAmount;
+        BigDecimal seconds = BigDecimal.valueOf(Duration.between(lastResumeAt, LocalDateTime.now()).toSeconds());
+        return this.earnedAmount.add(hourlyWage.multiply(seconds).divide(BigDecimal.valueOf(3600), 2, RoundingMode.HALF_UP));
     }
 
     public Long getWorkerId(){
         return employment.getWorker().getId();
+    }
+
+    public void pause(){
+        this.earnedAmount = getCurrentEarnedAmount();
+        this.status = WorkSessionStatus.PAUSED;
+    }
+    public void resume(){
+        this.status = WorkSessionStatus.WORKING;
+        this.lastResumeAt = LocalDateTime.now();
     }
 
 }
