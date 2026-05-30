@@ -1,12 +1,10 @@
 package com.wageclock.wageclock.domain.ewa;
 
-import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.payment.Payment;
 import com.wageclock.wageclock.domain.payment.PortOnePaymentService;
 import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
-import com.wageclock.wageclock.domain.worker.Worker;
-import com.wageclock.wageclock.domain.worksession.WorkSession;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,14 +27,12 @@ public class EwaRequestServiceTest {
     @Mock EwaRequestRepository ewaRequestRepository;
     @Mock RedissonClient redissonClient;
     @Mock RLock lock;
-    @Mock Employment employment;
-    @Mock Worker worker;
-    @Mock WorkSessionRepository workSessionRepository;
-    @Mock WorkSession workSession;
     @Mock PortOnePaymentService portOnePaymentService;
     @Mock EwaRequest ewaRequest;
     @Mock Payment payment;
     @Mock EwaRequestProcessor ewaRequestProcessor;
+    @Mock PayPeriod payPeriod;
+    @Mock PayPeriodRepository payPeriodRepository;
 
     @InjectMocks
     EwaRequestService ewaRequestService;
@@ -72,7 +68,7 @@ public class EwaRequestServiceTest {
                 .thenReturn(EwaRequest.EwaRequestStatus.REJECTED);
         when(ewaRequest.getEmployerId()).thenReturn(1L);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
-        when(ewaRequest.getWorkSession()).thenReturn(workSession);
+        when(ewaRequest.getPayPeriod()).thenReturn(payPeriod);
 
         EwaResponseDto response = ewaRequestService.rejectEwa(1L, 1L);
         assertEquals(EwaRequest.EwaRequestStatus.REJECTED, response.status());

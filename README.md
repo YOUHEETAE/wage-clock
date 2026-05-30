@@ -69,12 +69,26 @@ PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hex
 
 ---
 
+## 정산 플로우
+
+```
+고용주 정산 요청
+  → ACTIVE PayPeriod 조회
+  → WORKING / PAUSED 세션 존재 시 정산 불가
+  → PayPeriod CLOSED (periodEnd = 정산일)
+  → 실지급 월급 계산 (totalEarnedAmount - totalEwaAmount)
+  → 새 PayPeriod 자동 생성 (다음 사이클 시작)
+```
+
+---
+
 ## 도메인 모델
 
 ```
 Employer (고용주)
   └─ Employment (고용 관계) ── Worker (근로자)
-       └─ WorkSession (근무 세션 / 급여시계)
+       └─ PayPeriod (월 단위 정산 기간)
+            └─ WorkSession (근무 세션 / 급여시계)
             └─ EwaRequest (선지급 요청)
                  └─ Payment (결제)
                  │    └─ PaymentHistory (결제 히스토리)
@@ -88,7 +102,7 @@ Employer (고용주)
 ### 비즈니스 규칙
 
 ```
-선지급 한도:     실시간 적립액 × 30%
+선지급 한도:     (PayPeriod 적립액 + PAUSED 세션 적립액) × 30%
 선지급 잔액:     한도 - totalEwaAmount (누적 선지급액)
 실제 지급 월급:  확정 번 돈 - totalEwaAmount (월급 정산 시)
 Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
@@ -98,9 +112,10 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 
 | 항목 | 계산 시점 | 계산 방법 |
 |------|-----------|-----------|
-| **현재 번 돈** | EWA 요청할 때마다 | `(현재시각 - 출근시각) × 시급 / 3600` |
-| **확정 번 돈** | 퇴근 시 | 퇴근 시점의 현재 번 돈을 DB에 저장 |
-| **선지급 한도** | EWA 요청할 때마다 | `현재 번 돈 × 30% - totalEwaAmount` |
+| **현재 번 돈** | EWA 요청할 때마다 | PAUSED면 스냅샷 반환, WORKING이면 `lastResumeAt` 기준 누적 |
+| **확정 번 돈** | 퇴근(clockOut) 시 | 퇴근 시점의 현재 번 돈을 WorkSession에 저장 |
+| **PayPeriod.totalEarnedAmount** | 퇴근(clockOut) 시에만 누적 | `+ WorkSession.earnedAmount` |
+| **선지급 한도** | EWA 요청할 때마다 | `(totalEarnedAmount + PAUSED 세션 적립액) × 30% - totalEwaAmount` |
 | **totalEwaAmount** | EWA 요청 시 증가 | `+ requestedAmount` |
 | **totalEwaAmount** | EWA 거절 / 결제 실패 시 감소 | `- requestedAmount` |
 | **실제 지급 월급** | 월급 정산 시 (미구현) | `확정 번 돈 - totalEwaAmount` |
@@ -139,10 +154,11 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 8: PortOne 가상계좌 연동 (발급 + 웹훅 수신)
 ✅ Phase 9: EwaTransaction 거래 내역 기록
 ✅ Phase 10: Outbox 패턴 (장애복구 - Scheduler 기반)
-⬜ Phase 11: 고용주 대시보드 API
-⬜ Phase 12: 동시성 검증 (JMeter)
-⬜ Phase 13: Kafka (분산 서버 도입 후 Outbox 처리 주체 교체)
-⬜ Phase 14: React 프론트엔드 (급여시계 UI)
+⬜ Phase 11: 정산 API (PayPeriod close + 실지급 월급 계산 + 새 PayPeriod 생성)
+⬜ Phase 12: 고용주 대시보드 API
+⬜ Phase 13: 동시성 검증 (JMeter)
+⬜ Phase 14: Kafka (분산 서버 도입 후 Outbox 처리 주체 교체)
+⬜ Phase 15: React 프론트엔드 (급여시계 UI)
 ```
 
 ---
@@ -153,6 +169,28 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 선지급 건당 수수료 (근로자 부담)
 고용주는 무료로 선지급 인프라를 제공받고,
 근로자는 월급날 전에 적립 급여에 즉시 접근하는 대신 소액 수수료 부담
+```
+
+---
+
+## 고도화 방향
+
+```
+일괄 정산 (펌뱅킹)
+  고용주 정산 버튼 한 번 → 직원 N명 실지급 월급 동시 송금
+  각 직원별 (totalEarnedAmount - totalEwaAmount) 계산 → 펌뱅킹 API 병렬 처리
+  실패 건만 Outbox 패턴으로 자동 재시도
+
+정산 명세서
+  날짜별 근무 시간 (clockIn / clockOut / pause 이력)
+  EWA 선지급 내역 + 거절/실패 사유
+  최종 실지급 금액 산출 근거
+  → 근로자 / 고용주 양측이 같은 데이터를 보는 구조로 급여 분쟁 방지
+
+EWA 방식 피벗
+  선지급이 법적으로 제한될 경우 EwaPort 인터페이스 교체로
+  급여 담보 대출 방식으로 전환 가능
+  근태 기록 + 정산 명세서 코어는 EWA 없이도 독립 서비스로 동작
 ```
 
 ---

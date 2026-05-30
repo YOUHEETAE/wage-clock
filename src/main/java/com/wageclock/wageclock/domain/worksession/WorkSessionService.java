@@ -2,6 +2,8 @@ package com.wageclock.wageclock.domain.worksession;
 
 import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
@@ -14,11 +16,14 @@ import java.time.LocalDateTime;
 public class WorkSessionService {
     private final WorkSessionRepository workSessionRepository;
     private final EmploymentRepository employmentRepository;
+    private final PayPeriodRepository payPeriodRepository;
 
     public WorkSessionService(WorkSessionRepository workSessionRepository,
-                              EmploymentRepository employmentRepository) {
+                              EmploymentRepository employmentRepository,
+                              PayPeriodRepository payPeriodRepository) {
         this.workSessionRepository = workSessionRepository;
         this.employmentRepository = employmentRepository;
+        this.payPeriodRepository = payPeriodRepository;
     }
 
     @Transactional
@@ -32,8 +37,15 @@ public class WorkSessionService {
                 WorkSession.WorkSessionStatus.WORKING)){
             throw new DuplicateException("this WorkSession already exists");
         }
-        WorkSession workSession = workSessionRepository.save(WorkSession.builder()
-                .clockIn(LocalDateTime.now()).employment(employment).build());
+        PayPeriod payPeriod = payPeriodRepository
+                .findByEmploymentAndStatus(employment, PayPeriod.PayPeriodStatus.ACTIVE)
+                .orElseGet(() -> payPeriodRepository.save(new PayPeriod(employment)));
+        WorkSession workSession = workSessionRepository.save(
+                WorkSession.builder()
+                        .clockIn(LocalDateTime.now())
+                        .employment(employment)
+                        .payPeriod(payPeriod)
+                        .build());
         return new ClockInResponse(workSession.getId(), workSession.getClockIn());
     }
 
@@ -46,6 +58,28 @@ public class WorkSessionService {
         }
         workSession.clockOut();
         workSessionRepository.save(workSession);
+        workSession.getPayPeriod().addEarnedAmount(workSession.getEarnedAmount());
+        payPeriodRepository.save(workSession.getPayPeriod());
         return new ClockOutResponse(workSession.getClockOut(), workSession.getEarnedAmount());
+    }
+    @Transactional
+    public void pause(Long sessionId, Long workerId){
+        WorkSession workSession = workSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("work session not found"));
+        if(!workSession.getWorkerId().equals(workerId)){
+            throw new UnauthorizedException("unauthorized");
+        }
+        workSession.pause();
+        workSessionRepository.save(workSession);
+    }
+    @Transactional
+    public void resume(Long sessionId, Long workerId){
+        WorkSession workSession =  workSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("work session not found"));
+        if(!workSession.getWorkerId().equals(workerId)){
+            throw new UnauthorizedException("unauthorized");
+        }
+        workSession.resume();
+        workSessionRepository.save(workSession);
     }
 }

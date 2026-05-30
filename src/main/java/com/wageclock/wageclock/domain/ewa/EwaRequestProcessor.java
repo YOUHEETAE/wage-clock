@@ -1,5 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
@@ -13,23 +15,31 @@ import java.math.BigDecimal;
 @Service
 public class EwaRequestProcessor {
 
-    private final WorkSessionRepository workSessionRepository;
     private final EwaRequestRepository ewaRequestRepository;
+    private final PayPeriodRepository payPeriodRepository;
+    private final WorkSessionRepository workSessionRepository;
 
-    public EwaRequestProcessor(WorkSessionRepository workSessionRepository,
-                               EwaRequestRepository ewaRequestRepository) {
-        this.workSessionRepository = workSessionRepository;
+    public EwaRequestProcessor(EwaRequestRepository ewaRequestRepository,
+                               PayPeriodRepository payPeriodRepository,
+                               WorkSessionRepository workSessionRepository) {
         this.ewaRequestRepository = ewaRequestRepository;
+        this.payPeriodRepository = payPeriodRepository;
+        this.workSessionRepository = workSessionRepository;
     }
 
     @Transactional
     public EwaResponseDto processEwaRequest(EwaRequestDto ewaRequestDto, Long workerId){
-        WorkSession workSession = workSessionRepository.findByIdWithLock(ewaRequestDto.sessionId())
-                .orElseThrow(() -> new NotFoundException("Invalid session Id"));
-        if (!workSession.getWorkerId().equals(workerId)) {
+        PayPeriod payPeriod = payPeriodRepository.findByEmploymentAndStatusWithLock(ewaRequestDto.employmentId(),
+                PayPeriod.PayPeriodStatus.ACTIVE).orElseThrow(() -> new NotFoundException("Pay Period Not Found"));
+        if (!payPeriod.getWorkerId().equals(workerId)) {
             throw new UnauthorizedException("Invalid worker Id");
         }
-        BigDecimal limitEwaAmount = workSession.getRemainingEwaLimit();
+        BigDecimal pausedEarnedAmount = workSessionRepository
+                .findByEmploymentIdAndStatus(ewaRequestDto.employmentId(), WorkSession.WorkSessionStatus.PAUSED)
+                .map(WorkSession::getEarnedAmount)
+                .orElse(BigDecimal.ZERO);
+
+        BigDecimal limitEwaAmount = payPeriod.getRemainingEwaLimitWith(pausedEarnedAmount);
 
         if (ewaRequestDto.requestAmount().compareTo(limitEwaAmount) > 0 ||
                 ewaRequestDto.requestAmount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -41,13 +51,13 @@ public class EwaRequestProcessor {
         }
 
         EwaRequest ewaRequest = ewaRequestRepository.save(EwaRequest.builder()
-                .workSession(workSession)
+                .payPeriod(payPeriod)
                 .requestedAmount(ewaRequestDto.requestAmount())
                 .idempotencyKey(ewaRequestDto.idempotencyKey())
                 .build());
 
-        workSession.addEwaAmount(ewaRequestDto.requestAmount());
-        workSessionRepository.save(workSession);
+        payPeriod.addEwaAmount(ewaRequestDto.requestAmount());
+        payPeriodRepository.save(payPeriod);
 
         return new EwaResponseDto(ewaRequest.getId(),
                 ewaRequest.getRequestedAmount(), ewaRequest.getStatus());

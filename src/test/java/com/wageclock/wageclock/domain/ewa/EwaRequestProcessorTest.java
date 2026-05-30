@@ -1,9 +1,8 @@
 package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.employment.Employment;
-import com.wageclock.wageclock.domain.worker.Worker;
-import com.wageclock.wageclock.domain.worksession.WorkSession;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -11,7 +10,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,40 +24,30 @@ public class EwaRequestProcessorTest {
     @Mock
     Employment employment;
     @Mock
-    Worker worker;
-    @Mock
-    WorkSessionRepository workSessionRepository;
-    @Mock
-    WorkSession workSession;
-    @Mock
     EwaRequest ewaRequest;
     @InjectMocks
     EwaRequestProcessor ewaRequestProcessor;
+    @Mock
+    PayPeriodRepository payPeriodRepository;
 
     @Test
     void 한도_초과_요청_시_예외() {
-        when(employment.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
-        when(employment.getWorker()).thenReturn(worker);
-        when(worker.getId()).thenReturn(1L);
-        WorkSession workSession = WorkSession.builder()
-                .clockIn(LocalDateTime.now().minusHours(2))
-                .employment(employment).build();
-        workSession.clockOut();
-        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
+        when(employment.getWorkerId()).thenReturn(1L);
+        PayPeriod payPeriod = new PayPeriod(employment);
+        payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
+        when(payPeriodRepository.findByEmploymentAndStatusWithLock(
+                1L, PayPeriod.PayPeriodStatus.ACTIVE)).thenReturn(Optional.of(payPeriod));
         EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.valueOf(10000), "key-1");
         assertThrows(IllegalArgumentException.class, () -> ewaRequestProcessor.processEwaRequest(ewaRequestDto, 1L));
     }
 
     @Test
     void 멱등성_키_중복_요청_예외() {
-        when(employment.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
-        when(employment.getWorker()).thenReturn(worker);
-        when(worker.getId()).thenReturn(1L);
-        WorkSession workSession = WorkSession.builder()
-                .clockIn(LocalDateTime.now().minusHours(2))
-                .employment(employment).build();
-        workSession.clockOut();
-        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
+        when(employment.getWorkerId()).thenReturn(1L);
+        PayPeriod payPeriod = new PayPeriod(employment);
+        payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
+        when(payPeriodRepository.findByEmploymentAndStatusWithLock(
+                1L, PayPeriod.PayPeriodStatus.ACTIVE)).thenReturn(Optional.of(payPeriod));
         when(ewaRequestRepository.existsByIdempotencyKey("key-1")).thenReturn(true);
         EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
         assertThrows(IllegalArgumentException.class, () -> ewaRequestProcessor.processEwaRequest(ewaRequestDto, 1L));
@@ -67,18 +55,15 @@ public class EwaRequestProcessorTest {
 
     @Test
     void 정상_요청_시_응답_반환() {
-        when(employment.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
-        when(employment.getWorker()).thenReturn(worker);
-        when(worker.getId()).thenReturn(1L);
+        when(employment.getWorkerId()).thenReturn(1L);
         when(ewaRequestRepository.save(any())).thenReturn(ewaRequest);
         when(ewaRequest.getId()).thenReturn(1L);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.ONE);
         when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
-        WorkSession workSession = WorkSession.builder()
-                .clockIn(LocalDateTime.now().minusHours(2))
-                .employment(employment).build();
-        workSession.clockOut();
-        when(workSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(workSession));
+        PayPeriod payPeriod = new PayPeriod(employment);
+        payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
+        when(payPeriodRepository.findByEmploymentAndStatusWithLock(
+                1L, PayPeriod.PayPeriodStatus.ACTIVE)).thenReturn(Optional.of(payPeriod));
         EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
         EwaResponseDto ewaResponseDto = new EwaResponseDto(1L, BigDecimal.ONE, EwaRequest.EwaRequestStatus.PENDING);
         assertEquals(ewaResponseDto, ewaRequestProcessor.processEwaRequest(ewaRequestDto, 1L));
