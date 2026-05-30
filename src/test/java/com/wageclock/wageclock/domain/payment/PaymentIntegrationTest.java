@@ -10,6 +10,8 @@ import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.ewa.*;
 import com.wageclock.wageclock.domain.outbox.EwaOutBoxEventRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.*;
 import com.wageclock.wageclock.infrastructure.PortOneWebhookPayload;
@@ -79,6 +81,8 @@ public class PaymentIntegrationTest {
     EwaTransactionRepository ewaTransactionRepository;
     @Autowired
     EwaOutBoxEventRepository ewaOutBoxEventRepository;
+    @Autowired
+    PayPeriodRepository payPeriodRepository;
 
     @AfterEach
     void tearDown() {
@@ -87,6 +91,7 @@ public class PaymentIntegrationTest {
         paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
+        payPeriodRepository.deleteAll();
         employmentRepository.deleteAll();
         workerRepository.deleteAll();
         employerRepository.deleteAll();
@@ -94,7 +99,7 @@ public class PaymentIntegrationTest {
 
     String employerToken;
     String workerToken;
-    Long sessionId;
+    Long employmentId;
 
     @BeforeEach
     void setUp() throws InterruptedException {
@@ -119,7 +124,7 @@ public class PaymentIntegrationTest {
                 "/api/employment",
                 new HttpEntity<>(new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
                 CreateEmploymentResponse.class);
-        Long employmentId = employmentResponse.getBody().employmentId();
+        this.employmentId = employmentResponse.getBody().employmentId();
 
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
@@ -128,7 +133,7 @@ public class PaymentIntegrationTest {
                 "/api/worksession/clockIn",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders),
                 ClockInResponse.class);
-        sessionId = clockInResponse.getBody().sessionId();
+        Long sessionId = clockInResponse.getBody().sessionId();
 
         // 2초 대기 → 약 2,000원 적립 → 한도 약 600원
         Thread.sleep(2000);
@@ -151,7 +156,7 @@ public class PaymentIntegrationTest {
     }
 
     private Long requestEwa(BigDecimal amount) {
-        EwaRequestDto requestDto = new EwaRequestDto(sessionId, amount, UUID.randomUUID().toString());
+        EwaRequestDto requestDto = new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString());
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
                 "/api/ewaRequest/request",
                 new HttpEntity<>(requestDto, workerHeaders()),
@@ -189,9 +194,9 @@ public class PaymentIntegrationTest {
         testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/reject",
                 new HttpEntity<>(employerHeaders()), EwaResponseDto.class);
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).orElseThrow();
-        WorkSession workSession = workSessionRepository.findById(sessionId).orElseThrow();
+        PayPeriod payPeriod = payPeriodRepository.findById(employmentId).orElseThrow();
         assertEquals(EwaRequest.EwaRequestStatus.REJECTED, ewaRequest.getStatus());
-        assertEquals(0, workSession.getTotalEwaAmount().compareTo(BigDecimal.ZERO));
+        assertEquals(0, payPeriod.getTotalEwaAmount().compareTo(BigDecimal.ZERO));
     }
     @Test
     void 실패_시_payment_저장_및_ewa_status_FAILED(){

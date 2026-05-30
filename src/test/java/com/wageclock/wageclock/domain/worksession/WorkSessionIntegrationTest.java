@@ -8,6 +8,7 @@ import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,8 @@ public class WorkSessionIntegrationTest {
     EmploymentRepository employmentRepository;
     @Autowired
     WorkSessionRepository workSessionRepository;
+    @Autowired
+    PayPeriodRepository payPeriodRepository;
 
     private String workerToken;
     private Long employmentId;
@@ -66,6 +69,7 @@ public class WorkSessionIntegrationTest {
     @AfterEach
     void tearDown() {
         workSessionRepository.deleteAll();
+        payPeriodRepository.deleteAll();
         employmentRepository.deleteAll();
         workerRepository.deleteAll();
         employerRepository.deleteAll();
@@ -123,5 +127,41 @@ public class WorkSessionIntegrationTest {
         assertEquals(HttpStatus.OK, clockOutResponse.getStatusCode());
         assertNotNull(clockOutResponse.getBody().clockOut());
         assertNotNull(clockOutResponse.getBody().earnedAmount());
+    }
+
+    @Test
+    void 정상_pause() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + workerToken);
+
+        ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
+                "/api/worksession/clockIn", new HttpEntity<>(new ClockInRequest(employmentId), headers), ClockInResponse.class);
+        Long sessionId = clockInResponse.getBody().sessionId();
+
+        ResponseEntity<Void> pauseResponse = testRestTemplate.postForEntity(
+                "/api/worksession/pause", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
+
+        assertEquals(HttpStatus.OK, pauseResponse.getStatusCode());
+        WorkSession workSession = workSessionRepository.findById(sessionId).get();
+        assertEquals(WorkSession.WorkSessionStatus.PAUSED, workSession.getStatus());
+    }
+
+    @Test
+    void 정상_resume() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + workerToken);
+
+        ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
+                "/api/worksession/clockIn", new HttpEntity<>(new ClockInRequest(employmentId), headers), ClockInResponse.class);
+        Long sessionId = clockInResponse.getBody().sessionId();
+
+        testRestTemplate.postForEntity(
+                "/api/worksession/pause", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
+        ResponseEntity<Void> resumeResponse = testRestTemplate.postForEntity(
+                "/api/worksession/resume", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
+
+        assertEquals(HttpStatus.OK, resumeResponse.getStatusCode());
+        WorkSession workSession = workSessionRepository.findById(sessionId).get();
+        assertEquals(WorkSession.WorkSessionStatus.WORKING, workSession.getStatus());
     }
 }

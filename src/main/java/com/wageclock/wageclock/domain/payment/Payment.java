@@ -2,6 +2,7 @@ package com.wageclock.wageclock.domain.payment;
 
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
@@ -84,8 +85,8 @@ public class Payment extends BaseEntity {
     public void processing() { changeStatus(PaymentStatus.PROCESSING); }
 
 
-    public WorkSession getWorkSession(){
-        return this.ewaRequest.getWorkSession();
+    public PayPeriod getPayPeriod() {
+        return ewaRequest.getPayPeriod();
     }
 
     public void updateVirtualAccountInfo(String bank, String accountNumber, String expiredAt){
