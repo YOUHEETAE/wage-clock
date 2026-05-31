@@ -69,7 +69,7 @@ public class WorkSessionServiceTest {
     @Test
     void clockIn_정상_응답_반환() {
         LocalDateTime now = LocalDateTime.now();
-        when(payPeriodRepository.findByEmploymentAndStatus(any(), any())).thenReturn(Optional.of(payPeriod));
+        when(payPeriodRepository.findByEmploymentIdAndStatus(any(), any())).thenReturn(Optional.of(payPeriod));
         when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
         when(workSessionRepository.existsByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.WORKING)).thenReturn(false);
@@ -117,7 +117,7 @@ public class WorkSessionServiceTest {
         when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
         when(workSessionRepository.existsByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.WORKING)).thenReturn(false);
-        when(payPeriodRepository.findByEmploymentAndStatus(any(), any())).thenReturn(Optional.empty());
+        when(payPeriodRepository.findByEmploymentIdAndStatus(any(), any())).thenReturn(Optional.empty());
         when(payPeriodRepository.save(any())).thenReturn(payPeriod);
         when(workSessionRepository.save(any())).thenReturn(savedWorkSession);
         when(savedWorkSession.getId()).thenReturn(10L);
