@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.payperiod;
+package com.wageclock.wageclock.domain.dashboard;
 
 import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
@@ -8,12 +8,11 @@ import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.ewa.EwaRequestDto;
 import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.ewa.EwaResponseDto;
 import com.wageclock.wageclock.domain.ewa.EwaTransactionRepository;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
 import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
@@ -39,14 +38,13 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
-public class PayPeriodIntegrationTest {
+public class DashboardIntegrationTest {
     @Container
     static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16");
     @Container
@@ -76,7 +74,8 @@ public class PayPeriodIntegrationTest {
     EwaRequestRepository ewaRequestRepository;
     @Autowired
     PaymentRepository paymentRepository;
-    @Autowired PayPeriodRepository payPeriodRepository;
+    @Autowired
+    PayPeriodRepository payPeriodRepository;
     @MockitoBean
     VirtualAccountPort virtualAccountPort;
     @Autowired
@@ -85,7 +84,8 @@ public class PayPeriodIntegrationTest {
     private String workerToken;
     private String employerToken;
     private Long employmentId;
-    private Long sessionId;
+    private Long employmentId2;
+    private String workerToken2;
 
 
     @AfterEach
@@ -106,6 +106,8 @@ public class PayPeriodIntegrationTest {
                 new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
         testRestTemplate.postForEntity("/api/auth/signup",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
+        testRestTemplate.postForEntity("/api/auth/signup",
+                new SignupRequest("유사원", "worker2@test.com", "password", UserRole.WORKER), Void.class);
 
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
                         new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER), LoginResponse.class)
@@ -113,8 +115,12 @@ public class PayPeriodIntegrationTest {
         workerToken = testRestTemplate.postForEntity("/api/auth/login",
                         new LoginRequest("worker@test.com", "password", UserRole.WORKER), LoginResponse.class)
                 .getBody().token();
+        workerToken2 = testRestTemplate.postForEntity("/api/auth/login",
+                        new LoginRequest("worker2@test.com", "password", UserRole.WORKER), LoginResponse.class)
+                .getBody().token();
 
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
+        Long workerId2 = workerRepository.findByEmail("worker2@test.com").get().getId();
 
         // 시급 3,600,000 → 1초당 1,000원 적립
         HttpHeaders employerHeaders = new HttpHeaders();
@@ -123,7 +129,12 @@ public class PayPeriodIntegrationTest {
                 "/api/employment",
                 new HttpEntity<>(new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
                 CreateEmploymentResponse.class);
+        ResponseEntity<CreateEmploymentResponse> employment2Response = testRestTemplate.postForEntity(
+                "/api/employment",
+                new HttpEntity<>(new CreateEmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000)), employerHeaders),
+                CreateEmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
+        this.employmentId2 = employment2Response.getBody().employmentId();
 
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
@@ -132,18 +143,18 @@ public class PayPeriodIntegrationTest {
                 "/api/worksession/clockIn",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders),
                 ClockInResponse.class);
-        this.sessionId = clockInResponse.getBody().sessionId();
+        HttpHeaders workerHeaders2 = new HttpHeaders();
+        workerHeaders2.set("Authorization", "Bearer " + workerToken2);
+        ResponseEntity<ClockInResponse> clockInResponse2 = testRestTemplate.postForEntity(
+                "/api/worksession/clockIn",
+                new HttpEntity<>(new ClockInRequest(employmentId2), workerHeaders2),
+                ClockInResponse.class);
+        Long sessionId = clockInResponse.getBody().sessionId();
 
         // 2초 대기 → 약 2,000원 적립 → 한도 약 600원
         Thread.sleep(2000);
         testRestTemplate.postForEntity("/api/worksession/clockOut",
                 new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders), Void.class);
-    }
-
-    private HttpHeaders workerHeaders() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + workerToken);
-        return headers;
     }
 
     private HttpHeaders employerHeaders() {
@@ -152,96 +163,28 @@ public class PayPeriodIntegrationTest {
         return headers;
     }
 
-    private Long requestEwa(BigDecimal amount) {
-        EwaRequestDto requestDto = new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString());
-        ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
-                "/api/ewaRequest/request",
-                new HttpEntity<>(requestDto, workerHeaders()),
-                EwaResponseDto.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        return response.getBody().ewaRequestId();
-    }
     @Test
-    void WORKING_상태_workSession_존재_시_예외(){
-        testRestTemplate.postForEntity("/api/worksession/clockIn",
-                new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), Void.class);
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + employmentId + "/close",
-                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-    @Test
-    void PAUSED_상태_workSession_존재_시_예외(){
-        testRestTemplate.postForEntity("/api/worksession/clockIn",
-                new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), Void.class);
-        testRestTemplate.postForEntity("/api/worksession/pause",
-                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders()), Void.class);
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + employmentId + "/close",
-                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-    @Test
-    void 다른_고용주_close_요청_시_예외(){
-        Long otherEmploymentId = 3L;
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + otherEmploymentId + "/close",
-                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-    }
-    @Test
-    void 정상_close_검증(){
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + employmentId + "/close",
-                new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        PayPeriod payPeriod = payPeriodRepository.findAll().get(0);
-        assertEquals(PayPeriod.PayPeriodStatus.CLOSED, payPeriod.getStatus());
-        assertEquals(0, response.getBody().actualPayAmount().compareTo(BigDecimal.valueOf(2000)));
-    }
-
-    @Test
-    void 정상_summary_조회() {
-        ResponseEntity<PayPeriodSummaryResponse> response = testRestTemplate.exchange(
-                "/api/payperiod/" + employmentId + "/summary",
+    void 직원_두명_대시보드_조회() {
+        ResponseEntity<DashboardResponse[]> response = testRestTemplate.exchange(
+                "/api/dashboard",
                 HttpMethod.GET,
-                new HttpEntity<>(null, workerHeaders()),
-                PayPeriodSummaryResponse.class);
+                new HttpEntity<>(null, employerHeaders()),
+                DashboardResponse[].class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(0, response.getBody().totalEarnedAmount().compareTo(BigDecimal.valueOf(2000)));
-        assertEquals(0, response.getBody().totalEwaAmount().compareTo(BigDecimal.ZERO));
+        assertEquals(2, response.getBody().length);
     }
 
     @Test
-    void WORKING_세션_있을_때_currentEarned_반영() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/worksession/clockIn",
-                new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), ClockInResponse.class);
-        Thread.sleep(1000);
-
-        ResponseEntity<PayPeriodSummaryResponse> response = testRestTemplate.exchange(
-                "/api/payperiod/" + employmentId + "/summary",
+    void COMPLETED_세션_대시보드_조회() {
+        ResponseEntity<DashboardResponse[]> response = testRestTemplate.exchange(
+                "/api/dashboard",
                 HttpMethod.GET,
-                new HttpEntity<>(null, workerHeaders()),
-                PayPeriodSummaryResponse.class);
+                new HttpEntity<>(null, employerHeaders()),
+                DashboardResponse[].class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertTrue(response.getBody().totalEarnedAmount().compareTo(BigDecimal.valueOf(2000)) > 0);
-    }
-
-    @Test
-    void 다른_워커_접근_시_예외() {
-        testRestTemplate.postForEntity("/api/auth/signup",
-                new SignupRequest("다른워커", "other@test.com", "password", UserRole.WORKER), Void.class);
-        String otherToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("other@test.com", "password", UserRole.WORKER), LoginResponse.class)
-                .getBody().token();
-        HttpHeaders otherHeaders = new HttpHeaders();
-        otherHeaders.set("Authorization", "Bearer " + otherToken);
-
-        ResponseEntity<PayPeriodSummaryResponse> response = testRestTemplate.exchange(
-                "/api/payperiod/" + employmentId + "/summary",
-                HttpMethod.GET,
-                new HttpEntity<>(null, otherHeaders),
-                PayPeriodSummaryResponse.class);
-        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        boolean hasCompleted = java.util.Arrays.stream(response.getBody())
+                .anyMatch(r -> r.status() != null &&
+                        r.status().name().equals("COMPLETED"));
+        assertTrue(hasCompleted);
     }
 }
