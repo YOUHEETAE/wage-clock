@@ -52,4 +52,8 @@ public class Employment extends BaseEntity {
     public Long getWorkerId() {
         return worker.getId();
     }
+
+    public Long getEmployerId() {
+        return employer.getId();
+    }
 }

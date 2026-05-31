@@ -13,5 +13,4 @@ public interface EmploymentRepository extends JpaRepository<Employment,Long> {
     @Query("SELECT CASE WHEN COUNT(e) > 0 THEN true ELSE false END FROM Employment e WHERE e.employer.id = :employerId AND e.worker.id = :workerId")
     boolean existsByEmployerIdAndWorkerId(@Param("employerId") Long employerId, @Param("workerId") Long workerId);
 
-    Optional<Employment> findByIdAndEmployerId(Long employmentId, Long employerId);
 }

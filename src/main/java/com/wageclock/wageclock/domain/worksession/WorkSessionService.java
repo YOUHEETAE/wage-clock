@@ -38,7 +38,7 @@ public class WorkSessionService {
             throw new DuplicateException("this WorkSession already exists");
         }
         PayPeriod payPeriod = payPeriodRepository
-                .findByEmploymentAndStatus(employment, PayPeriod.PayPeriodStatus.ACTIVE)
+                .findByEmploymentIdAndStatus(employment.getId(), PayPeriod.PayPeriodStatus.ACTIVE)
                 .orElseGet(() -> payPeriodRepository.save(new PayPeriod(employment)));
         WorkSession workSession = workSessionRepository.save(
                 WorkSession.builder()
