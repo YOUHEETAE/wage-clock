@@ -83,5 +83,8 @@ public class PayPeriod extends BaseEntity {
     public BigDecimal getActualPayAmount(){
         return this.totalEarnedAmount.subtract(this.totalEwaAmount);
     }
+    public Long getEmployerId(){
+        return employment.getEmployer().getId();
+    }
 
 }
