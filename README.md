@@ -28,8 +28,11 @@
 ```
 출근 → 급여시계 시작 (분 단위 적립)
 퇴근 → 급여 확정
-선지급 요청 → 근무 중/퇴근 후 모두 가능, 적립액의 30% 한도 내에서 즉시 지급    
-고용주 대시보드 → 직원별 급여 현황 실시간 조회
+선지급 요청 → 근무 중/퇴근 후 모두 가능, 적립액의 30% 한도 내에서 즉시 지급
+정산 → PayPeriod close, 실지급 월급 계산 (totalEarnedAmount - totalEwaAmount)
+고용주 대시보드 → 직원별 최신 근무 현황 실시간 조회 (JdbcTemplate DISTINCT ON)
+PayPeriod 요약 → 근로자/고용주 모두 조회 가능, 진행 중 세션 실시간 반영
+고용 이력 타임라인 → PayPeriod/WorkSession/EWA 이벤트를 시간순으로 조회
 ```
 
 ---
@@ -118,7 +121,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **선지급 한도** | EWA 요청할 때마다 | `(totalEarnedAmount + PAUSED 세션 적립액) × 30% - totalEwaAmount` |
 | **totalEwaAmount** | EWA 요청 시 증가 | `+ requestedAmount` |
 | **totalEwaAmount** | EWA 거절 / 결제 실패 시 감소 | `- requestedAmount` |
-| **실제 지급 월급** | 월급 정산 시 (미구현) | `확정 번 돈 - totalEwaAmount` |
+| **실제 지급 월급** | 월급 정산 시 (PayPeriod close) | `확정 번 돈 - totalEwaAmount` |
 | **가상계좌 발급** | 고용주 승인(initiateEwa) 시 | PortOne API 호출 |
 | **근로자 가상계좌 입금** | 웹훅 수신 시 | 입금 확인 후 Mock 처리 |
 
@@ -146,19 +149,19 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 1: 프로젝트 세팅 (Spring Boot + PostgreSQL + JWT)
 ✅ Phase 2: 엔티티 설계 (Employer / Worker / Employment / WorkSession / EwaRequest)
 ✅ Phase 3: JWT 인증 (회원가입 / 로그인)
-✅ Phase 4: 근무 세션 API (출근 / 퇴근 / 급여 계산)
+✅ Phase 4: 근무 세션 API (출근 / 퇴근 / 일시정지 / 재개 / 급여 계산)
 ✅ Phase 5: 선지급 API (멱등성)
-✅ Phase 5.5: redis 연동 (분산 락)
+✅ Phase 5.5: Redis 연동 (분산 락)
 ✅ Phase 6: PG 인터페이스 설계
 ✅ Phase 7: Payment History 설계
 ✅ Phase 8: PortOne 가상계좌 연동 (발급 + 웹훅 수신)
 ✅ Phase 9: EwaTransaction 거래 내역 기록
 ✅ Phase 10: Outbox 패턴 (장애복구 - Scheduler 기반)
-⬜ Phase 11: 정산 API (PayPeriod close + 실지급 월급 계산 + 새 PayPeriod 생성)
-⬜ Phase 12: 고용주 대시보드 API
-⬜ Phase 13: 동시성 검증 (JMeter)
-⬜ Phase 14: Kafka (분산 서버 도입 후 Outbox 처리 주체 교체)
-⬜ Phase 15: React 프론트엔드 (급여시계 UI)
+✅ Phase 11: 정산 API (PayPeriod close + 실지급 월급 계산 + 새 PayPeriod 생성)
+✅ Phase 12: 고용주 대시보드 + PayPeriod 요약 + 고용 이력 타임라인 (JdbcTemplate)
+⬜ Phase 13: 정산 명세서 + 일괄 정산 (Mock 펌뱅킹 병렬 처리 + Outbox 재시도)
+⬜ Phase 14: Kafka (Outbox Consumer 교체 - 분산 서버 환경 대응)
+⬜ Phase 15: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```
 
 ---
@@ -199,6 +202,5 @@ EWA 방식 피벗
 
 ```
 main    → 배포 가능한 최종 브랜치
-dev     → 개발 통합 브랜치
 feature → 기능 단위 개발 브랜치 (feature/xxx → dev PR)
 ```
