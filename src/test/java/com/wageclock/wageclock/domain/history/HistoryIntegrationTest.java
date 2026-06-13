@@ -8,7 +8,7 @@ import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;

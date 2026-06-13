@@ -26,10 +26,22 @@ public class Worker extends BaseEntity {
     @Column(nullable = false)
     private String password;
 
+    private String accountNumber;
+
+    private String bankCode;
+
+    private String accountHolder;
+
+
     @Builder
     public Worker(String name, String email, String password) {
         this.name = name;
         this.email = email;
         this.password = password;
+    }
+    public void registerAccountInfo(String accountNumber, String bankCode, String accountHolder) {
+        this.accountNumber = accountNumber;
+        this.bankCode = bankCode;
+        this.accountHolder = accountHolder;
     }
 }

@@ -4,7 +4,7 @@ import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
 import com.wageclock.wageclock.domain.payment.Payment;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
-import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

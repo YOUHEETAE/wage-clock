@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.domain.outbox;
 
-import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
-import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -21,7 +21,7 @@ public class EwaOutBoxService {
     public void processEvent(EwaOutBoxEvent event) {
         try {
             VirtualAccountResult account = virtualAccountPort.issueVirtualAccount(event.getPortOnePaymentId(), event.getAmount(),
-                    event.getEwaRequestId(), event.getEmployerName());
+                    "EWA-" + event.getEwaRequestId(), event.getEmployerName());
             ewaOutBoxResultHandler.saveSuccess(event, account);
         } catch (Exception e) {
             event.incrementRetryCount();

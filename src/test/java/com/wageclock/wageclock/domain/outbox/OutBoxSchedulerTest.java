@@ -24,6 +24,14 @@ public class OutBoxSchedulerTest {
     @InjectMocks
     OutBoxScheduler outBoxScheduler;
 
+    @Mock BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository;
+
+    @Mock BulkSettlementOutBoxService bulkSettlementOutBoxService;
+
+    @Mock InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
+
+    @Mock InterBankFailureOutBoxEventService interBankFailureOutBoxEventService;
+
     @Test
     void processEwaOutBoxEvent_검증(){
         EwaOutBoxEvent event = EwaOutBoxEvent.builder()
@@ -36,5 +44,32 @@ public class OutBoxSchedulerTest {
         outBoxScheduler.processEwaOutBoxEvent();
         verify(ewaOutBoxEventRepository).findByStatus(any());
         verify(ewaOutBoxService).processEvent(any());
+    }
+
+    @Test
+    void processBulkSettlementOutBoxEvent_검증() {
+        BulkSettlementOutBoxEvent event = BulkSettlementOutBoxEvent.builder()
+                .bulkSettlementId(1L)
+                .portOnePaymentId("BULK-001")
+                .totalAmount(BigDecimal.valueOf(100000))
+                .employerName("홍길동")
+                .build();
+        when(bulkSettlementOutBoxEventRepository.findByStatus(any())).thenReturn(List.of(event));
+        outBoxScheduler.processBulkSettlementOutBoxEvent();
+        verify(bulkSettlementOutBoxEventRepository).findByStatus(any());
+        verify(bulkSettlementOutBoxService).processEvent(any());
+    }
+
+    @Test
+    void processInterBankFailureOutBoxEvent_검증() {
+        InterBankFailureOutBoxEvent event = InterBankFailureOutBoxEvent.builder()
+                .transferId("TX-001")
+                .portOnePaymentId("BULK-001")
+                .bulkSettlementId(1L)
+                .build();
+        when(interBankFailureOutBoxEventRepository.findByStatus(any())).thenReturn(List.of(event));
+        outBoxScheduler.processInterBankFailureOutBoxEvent();
+        verify(interBankFailureOutBoxEventRepository).findByStatus(any());
+        verify(interBankFailureOutBoxEventService).processEvent(any());
     }
 }

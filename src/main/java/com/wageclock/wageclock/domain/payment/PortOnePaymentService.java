@@ -3,6 +3,8 @@ package com.wageclock.wageclock.domain.payment;
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
 import com.wageclock.wageclock.domain.outbox.EwaOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaOutBoxEventRepository;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,7 +16,7 @@ import java.util.UUID;
 public class PortOnePaymentService implements PaymentService{
 
     private final PaymentRepository paymentRepository;
-    private final VirtualAccountPort  virtualAccountPort;
+    private final VirtualAccountPort virtualAccountPort;
     private final EwaOutBoxEventRepository ewaOutBoxEventRepository;
 
     public PortOnePaymentService(PaymentRepository paymentRepository, VirtualAccountPort virtualAccountPort,
@@ -26,7 +28,7 @@ public class PortOnePaymentService implements PaymentService{
 
     @Transactional
     public  Payment processPayment(EwaRequest ewaRequest) {
-        String portOnePaymentId = UUID.randomUUID().toString();
+        String portOnePaymentId = "EWA-" + UUID.randomUUID();
         Payment payment = Payment.builder()
                 .portOnePaymentId(portOnePaymentId)
                 .employer(ewaRequest.getEmployer())
@@ -45,9 +47,9 @@ public class PortOnePaymentService implements PaymentService{
     }
 
     public VirtualAccountResult getAccount(String portOnePaymentId, BigDecimal totalAmount,
-                                                        Long ewaRequestId, String employerName) {
+                                           String orderName, String employerName) {
         return virtualAccountPort
-                .issueVirtualAccount(portOnePaymentId, totalAmount, ewaRequestId, employerName);
+                .issueVirtualAccount(portOnePaymentId, totalAmount, orderName, employerName);
     }
 
     @Transactional

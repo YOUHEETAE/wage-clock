@@ -12,6 +12,8 @@ import com.wageclock.wageclock.domain.ewa.*;
 import com.wageclock.wageclock.domain.outbox.EwaOutBoxEventRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.*;
 import com.wageclock.wageclock.infrastructure.PortOneWebhookPayload;

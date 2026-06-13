@@ -49,7 +49,7 @@ public class PortOneService {
         }
     }
 
-    public PortOneVirtualAccountResponse createVirtualAccount(String portOnePaymentId, long totalAmount, Long ewaRequestId, String employerName) {
+    public PortOneVirtualAccountResponse createVirtualAccount(String portOnePaymentId, long totalAmount, String orderName, String employerName) {
         PortOneTokenResponseToken token = getAccessToken();
         String channelKey = portOneProperties.getChannelKey();
         String storeId = portOneProperties.getStoreId();
@@ -58,7 +58,7 @@ public class PortOneService {
                     .uri("/payments/{paymentId}/instant", portOnePaymentId)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Bearer " + token.accessToken())
-                    .body(new PortOneVirtualAccountRequest(storeId, channelKey, "EWA-" + ewaRequestId,
+                    .body(new PortOneVirtualAccountRequest(storeId, channelKey, orderName,
                             new PortOneVirtualAccountRequest.Amount(totalAmount), "KRW",
                             new PortOneMethod(new PortOneMethod.
                                     VirtualAccount("SHINHAN",

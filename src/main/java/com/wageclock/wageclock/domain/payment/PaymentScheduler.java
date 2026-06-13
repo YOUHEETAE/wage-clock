@@ -1,12 +1,15 @@
 package com.wageclock.wageclock.domain.payment;
 
 import com.wageclock.wageclock.domain.ewa.EwaSettlementService;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@Slf4j
 public class PaymentScheduler {
 
     private final PaymentRepository paymentRepository;
@@ -24,12 +27,16 @@ public class PaymentScheduler {
     public void retryPayment() {
         List<Payment> payment = paymentRepository.findByStatus(Payment.PaymentStatus.PROCESSING);
         for (Payment pay : payment) {
-            String portOnePaymentId = pay.getPortOnePaymentId();
-            String status = virtualAccountPort.getVirtualAccountStatus(portOnePaymentId);
-            if(status.equals("PAID")) {
-                ewaSettlementService.approveEwa(portOnePaymentId);
-            }else if(status.equals("FAILED") || status.equals("CANCELLED")) {
-                ewaSettlementService.failEwa(portOnePaymentId);
+            try {
+                String portOnePaymentId = pay.getPortOnePaymentId();
+                String status = virtualAccountPort.getVirtualAccountStatus(portOnePaymentId);
+                if (status.equals("PAID")) {
+                    ewaSettlementService.approveEwa(portOnePaymentId);
+                } else if (status.equals("FAILED") || status.equals("CANCELLED")) {
+                    ewaSettlementService.failEwa(portOnePaymentId);
+                }
+            }catch (Exception e) {
+                log.warn("Failed to check payment status: {}", pay.getPortOnePaymentId(), e);
             }
         }
     }
