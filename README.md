@@ -33,6 +33,7 @@
 고용주 대시보드 → 직원별 최신 근무 현황 실시간 조회 (JdbcTemplate DISTINCT ON)
 PayPeriod 요약 → 근로자/고용주 모두 조회 가능, 진행 중 세션 실시간 반영
 고용 이력 타임라인 → PayPeriod/WorkSession/EWA 이벤트를 시간순으로 조회
+일괄 정산 → 고용주 정산 버튼 한 번으로 직원 N명 동시 송금 (Mock 헥토파이낸셜 펌뱅킹)
 ```
 
 ---
@@ -50,9 +51,12 @@ PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hex
 외부 API 트랜잭션 분리 → DB 커넥션 풀 고갈 방지를 위해 외부 API 호출과 @Transactional 분리
 거래 내역 기록         → balance 없이 EwaTransaction으로 거래 이력만 관리
                           (실서비스 전환 시 오픈뱅킹 API 연동으로 실제 송금 처리)
-장애복구 (Outbox 패턴) → PortOne 가상계좌 발급 실패 시 Scheduler 기반 자동 재시도
+장애복구 (Outbox 패턴) → PortOne 가상계좌 발급 / 펌뱅킹 이체 실패 시 Scheduler 기반 자동 재시도
                           (Kafka Consumer로 교체 가능한 구조로 설계)
 장애복구 (결제 조회)   → 웹훅 미수신 시 Scheduler가 PortOne 직접 조회 후 상태 반영
+일괄 정산 병렬 처리    → CompletableFuture + ExecutorService로 직원 N명 동시 이체
+                          이체 결과를 Sealed Interface로 타입 안전하게 분기 처리
+타행이체불능 재시도    → 펌뱅킹 실패 통보 수신 시 Outbox 패턴으로 자동 재이체
 ```
 
 ---
@@ -81,6 +85,30 @@ PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hex
   → PayPeriod CLOSED (periodEnd = 정산일)
   → 실지급 월급 계산 (totalEarnedAmount - totalEwaAmount)
   → 새 PayPeriod 자동 생성 (다음 사이클 시작)
+```
+
+---
+
+## 일괄 정산 플로우
+
+```
+고용주 일괄 정산 요청 (직원 N명 선택)
+  → ACTIVE PayPeriod N개 조회 (비관적 락)
+  → 중복 정산 방지 체크
+  → BulkSettlement 생성 → PortOne 가상계좌 발급 (Outbox 패턴으로 장애복구)
+  → 고용주 가상계좌 입금
+  → PortOne 웹훅 수신 (Transaction.Paid)
+  → CompletableFuture로 N명 동시 펌뱅킹 이체
+       ├─ 성공 → transferId 저장, PayPeriod CLOSED
+       ├─ VTIM (응답 지연) → pendingMessageNo 저장, 이후 재조회
+       └─ 실패 → Outbox 패턴으로 자동 재이체
+  → 전원 성공 시 BulkSettlement COMPLETED
+  → 일부 실패 시 TRANSFER_FAILED → Scheduler가 주기적으로 재시도
+
+타행이체불능 수신 시 (전문번호 3000)
+  → 해당 아이템 FAILED 처리
+  → InterBankFailureOutBoxEvent 생성
+  → Scheduler가 재이체 후 성공 시 COMPLETED
 ```
 
 ---
@@ -159,9 +187,10 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 10: Outbox 패턴 (장애복구 - Scheduler 기반)
 ✅ Phase 11: 정산 API (PayPeriod close + 실지급 월급 계산 + 새 PayPeriod 생성)
 ✅ Phase 12: 고용주 대시보드 + PayPeriod 요약 + 고용 이력 타임라인 (JdbcTemplate)
-⬜ Phase 13: 정산 명세서 + 일괄 정산 (Mock 펌뱅킹 병렬 처리 + Outbox 재시도)
-⬜ Phase 14: Kafka (Outbox Consumer 교체 - 분산 서버 환경 대응)
-⬜ Phase 15: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
+✅ Phase 13: 일괄 정산 (Mock 헥토파이낸셜 펌뱅킹 병렬 처리 + Outbox 재시도)
+⬜ Phase 14: EWA 리팩토링 (EWA 가상계좌 발급 제거)
+⬜ Phase 15: Kafka (Outbox Consumer 교체 - 분산 서버 환경 대응)
+⬜ Phase 16: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```
 
 ---

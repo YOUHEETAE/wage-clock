@@ -13,7 +13,7 @@ import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
 import com.wageclock.wageclock.domain.ewa.EwaResponseDto;
 import com.wageclock.wageclock.domain.ewa.EwaTransactionRepository;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
-import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;

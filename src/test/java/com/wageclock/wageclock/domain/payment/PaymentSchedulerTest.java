@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.payment;
 
 import com.wageclock.wageclock.domain.ewa.EwaSettlementService;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

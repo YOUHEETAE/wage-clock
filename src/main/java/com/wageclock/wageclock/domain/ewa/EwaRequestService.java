@@ -2,6 +2,7 @@ package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.payment.*;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import com.wageclock.wageclock.global.exception.TooManyRequestsException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
@@ -53,7 +54,7 @@ public class EwaRequestService {
         EwaRequest ewaRequest = ewaRequestProcessor.validateAndLockEwa(ewaRequestId, employerId);
         Payment payment = portOnePaymentService.processPayment(ewaRequest);
         VirtualAccountResult account = portOnePaymentService.getAccount(payment.getPortOnePaymentId(),
-                ewaRequest.getRequestedAmount(), ewaRequestId, ewaRequest.getEmployerName());
+                ewaRequest.getRequestedAmount(), "EWA-" + ewaRequestId, ewaRequest.getEmployerName());
         portOnePaymentService.updatePayment(payment, account);
         return new InitiateEwaResponse(ewaRequestId, ewaRequest.getRequestedAmount(),
                 ewaRequest.getStatus(), account.accountNumber(), account.bank(), account.expiredAt());

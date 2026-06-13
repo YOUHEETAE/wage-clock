@@ -4,6 +4,8 @@ import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
 import com.wageclock.wageclock.domain.outbox.EwaOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaOutBoxEventRepository;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

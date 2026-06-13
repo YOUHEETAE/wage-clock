@@ -43,7 +43,7 @@ public class PortOneServiceIntegrationTest {
     void createPortOneAccount_success(){
         String portOnePaymentId = UUID.randomUUID().toString();
         PortOneVirtualAccountResponse account = portOneService.createVirtualAccount(portOnePaymentId,
-                10000L, 1L, "홍길동");
+                10000L, "EWA-1", "홍길동");
         assertNotNull(account);
         assertNotNull(account.PaymentId());
         System.out.println(account);
@@ -52,7 +52,7 @@ public class PortOneServiceIntegrationTest {
     void getVirtualAccountInfo_success(){
         String portOnePaymentId = UUID.randomUUID().toString();
         PortOneVirtualAccountResponse accountResponse = portOneService.createVirtualAccount(portOnePaymentId,
-                10000L, 1L, "홍길동");
+                10000L, "EWA-1", "홍길동");
         String paymentId = accountResponse.PaymentId();
         PortOneVirtualAccountInfoResponse info = portOneService.getVirtualAccountInfo(paymentId);
         assertNotNull(info);
