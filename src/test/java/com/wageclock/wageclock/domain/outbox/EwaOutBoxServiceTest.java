@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.domain.outbox;
 
-import com.wageclock.wageclock.domain.payment.VirtualAccountPort;
-import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
+import com.wageclock.wageclock.domain.port.VirtualAccountPort;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

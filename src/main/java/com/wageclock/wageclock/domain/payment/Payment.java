@@ -3,7 +3,6 @@ package com.wageclock.wageclock.domain.payment;
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
-import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -52,6 +51,7 @@ public class Payment extends BaseEntity {
     private PaymentStatus status;
 
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL)
+    @OrderBy("id ASC")
     List<PaymentHistory> histories = new ArrayList<>();
 
     public enum PaymentStatus{

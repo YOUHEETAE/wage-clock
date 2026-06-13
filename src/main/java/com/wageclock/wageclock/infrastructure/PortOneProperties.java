@@ -9,7 +9,6 @@ public class PortOneProperties {
     private final String apiSecret;
     private final String storeId;
     private final String channelKey;
-
     public PortOneProperties(String apiSecret, String storeId, String channelKey) {
         this.apiSecret = apiSecret;
         this.storeId = storeId;
