@@ -1,6 +1,6 @@
 package com.wageclock.wageclock.infrastructure;
 
-import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.ExternalApiException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,9 +31,9 @@ public class PortOneVirtualAccountAdapterTest {
                         new PortOneVirtualAccountInfoResponse
                                 .Method("Toss", "1234", "2026-05-01","홍길동")));
         portOneVirtualAccountAdaptor.issueVirtualAccount("testId",
-                BigDecimal.valueOf(10000), 1L, "홍길동");
+                BigDecimal.valueOf(10000), "EWA-1", "홍길동");
         verify(portOneService).createVirtualAccount("testId",
-                10000L, 1L, "홍길동");
+                10000L, "EWA-1", "홍길동");
         verify(portOneService).getVirtualAccountInfo("testId");
     }
 
@@ -44,7 +44,7 @@ public class PortOneVirtualAccountAdapterTest {
                         new PortOneVirtualAccountInfoResponse
                                 .Method("Toss", "1234", "2026-05-01","홍길동")));
         VirtualAccountResult result = portOneVirtualAccountAdaptor.issueVirtualAccount("testId",
-                BigDecimal.valueOf(10000), 1L, "홍길동");
+                BigDecimal.valueOf(10000), "EWA-1", "홍길동");
         assertEquals("Toss",result.bank());
         assertEquals("1234",result.accountNumber());
         assertEquals("2026-05-01", result.expiredAt());
@@ -53,9 +53,9 @@ public class PortOneVirtualAccountAdapterTest {
     @Test
     void 예외_발생_시_전파(){
         when(portOneService.createVirtualAccount("testId",
-                10000L, 1L, "홍길동")).thenThrow(ExternalApiException.class);
+                10000L, "EWA-1", "홍길동")).thenThrow(ExternalApiException.class);
         assertThrows(ExternalApiException.class, () ->
                 portOneVirtualAccountAdaptor.issueVirtualAccount("testId",
-                        BigDecimal.valueOf(10000), 1L, "홍길동"));
+                        BigDecimal.valueOf(10000), "EWA-1", "홍길동"));
     }
 }

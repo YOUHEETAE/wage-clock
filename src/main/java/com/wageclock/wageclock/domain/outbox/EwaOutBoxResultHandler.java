@@ -2,7 +2,7 @@ package com.wageclock.wageclock.domain.outbox;
 
 import com.wageclock.wageclock.domain.payment.Payment;
 import com.wageclock.wageclock.domain.payment.PaymentRepository;
-import com.wageclock.wageclock.domain.payment.VirtualAccountResult;
+import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;

@@ -3,6 +3,7 @@ package com.wageclock.wageclock.domain.ewa;
 import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
+import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,6 +30,8 @@ public class EwaRequestProcessorTest {
     EwaRequestProcessor ewaRequestProcessor;
     @Mock
     PayPeriodRepository payPeriodRepository;
+    @Mock
+    WorkSessionRepository workSessionRepository;
 
     @Test
     void 한도_초과_요청_시_예외() {

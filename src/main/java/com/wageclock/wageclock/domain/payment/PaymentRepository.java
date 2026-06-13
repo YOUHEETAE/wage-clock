@@ -13,4 +13,5 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("SELECT p FROM Payment p JOIN FETCH p.histories")
     List<Payment> findAllWithHistories();
     Optional<Payment> findByPortOnePaymentId(String portOnePaymentId);
+    boolean existsByPortOnePaymentId(String portOnePaymentId);
 }
