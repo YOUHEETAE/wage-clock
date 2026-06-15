@@ -31,7 +31,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run tests
-        run: ./gradlew test
+        run: ./gradlew test -PexcludeTags="external"
 
       - name: Build
         run: ./gradlew build -x test
