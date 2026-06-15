@@ -9,10 +9,7 @@ import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.ewa.*;
-import com.wageclock.wageclock.domain.payment.PaymentRepository;
-import com.wageclock.wageclock.domain.payment.PaymentScheduler;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
-import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
@@ -21,7 +18,6 @@ import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -73,16 +69,8 @@ public class OutBoxIntegrationTest {
     WorkSessionRepository workSessionRepository;
     @Autowired
     EwaRequestRepository ewaRequestRepository;
-    @Autowired
-    PaymentRepository paymentRepository;
     @MockitoBean
     VirtualAccountPort virtualAccountPort;
-    @MockitoBean
-    PaymentScheduler paymentScheduler;
-    @Autowired
-    EwaTransactionRepository ewaTransactionRepository;
-    @Autowired
-    EwaOutBoxEventRepository ewaOutBoxEventRepository;
     @Autowired
     OutBoxScheduler outBoxScheduler;
     @Autowired
@@ -90,9 +78,6 @@ public class OutBoxIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        ewaTransactionRepository.deleteAll();
-        ewaOutBoxEventRepository.deleteAll();
-        paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
         payPeriodRepository.deleteAll();
@@ -168,32 +153,5 @@ public class OutBoxIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         return response.getBody().ewaRequestId();
     }
-    @Test
-    void initiateEwa_성공_시_outBoxEvent_PROCESSED(){
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("Toss", "1234-1234", "2026-05-24"));
-        Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()),
-                InitiateEwaResponse.class);
-        EwaOutBoxEvent ewaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
-        assertEquals(EwaOutBoxEvent.OutBoxStatus.PROCESSED, ewaOutBoxEvent.getStatus());
-    }
-    @Test
-    void initiateEwa_실패_시_outBoxEvent_PENDING(){
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenThrow(new RuntimeException(""));
-        Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(employerHeaders()),
-                Void.class);
-        EwaOutBoxEvent ewaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
-        assertEquals(EwaOutBoxEvent.OutBoxStatus.PENDING, ewaOutBoxEvent.getStatus());
-        assertEquals(0,ewaOutBoxEvent.getRetryCount());
-        outBoxScheduler.processEwaOutBoxEvent();
-        EwaOutBoxEvent retryEwaOutBoxEvent = ewaOutBoxEventRepository.findAll().get(0);
-        assertEquals(1,retryEwaOutBoxEvent.getRetryCount());
-    }
+
 }

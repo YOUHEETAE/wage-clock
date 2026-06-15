@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,8 +56,8 @@ class InterBankFailureOutBoxEventServiceTest {
         Worker worker = mock(Worker.class);
         when(bulkSettlementItemRepository.findByTransferId("TX-001")).thenReturn(Optional.of(item));
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-        when(wageTransferPort.transfer(worker, BigDecimal.valueOf(50000), 10L))
-                .thenReturn(new WageTransferResult("TX-002", null));
+        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), eq("BULK-10")))
+                .thenReturn(new WageTransferResult("TX-002", null, null, null));
 
         interBankFailureOutBoxEventService.processEvent(event);
 
@@ -70,10 +71,10 @@ class InterBankFailureOutBoxEventServiceTest {
         Worker worker = mock(Worker.class);
         when(bulkSettlementItemRepository.findByTransferId("TX-001")).thenReturn(Optional.of(item));
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-        when(wageTransferPort.transfer(worker, BigDecimal.valueOf(50000), 10L))
-                .thenReturn(new WageTransferResult(null, "MSG-001"));
-        when(wageTransferPort.inquireTransfer("MSG-001", 10L))
-                .thenReturn(new WageTransferResult("TX-002", null));
+        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), eq("BULK-10")))
+                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
+        when(wageTransferPort.inquireTransfer("MSG-001"))
+                .thenReturn(new WageTransferResult("TX-002", null, null, null));
 
         interBankFailureOutBoxEventService.processEvent(event);
 
@@ -87,10 +88,10 @@ class InterBankFailureOutBoxEventServiceTest {
         Worker worker = mock(Worker.class);
         when(bulkSettlementItemRepository.findByTransferId("TX-001")).thenReturn(Optional.of(item));
         when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
-        when(wageTransferPort.transfer(worker, BigDecimal.valueOf(50000), 10L))
-                .thenReturn(new WageTransferResult(null, "MSG-001"));
-        when(wageTransferPort.inquireTransfer("MSG-001", 10L))
-                .thenReturn(new WageTransferResult(null, "MSG-002"));
+        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), eq("BULK-10")))
+                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
+        when(wageTransferPort.inquireTransfer("MSG-001"))
+                .thenReturn(new WageTransferResult(null, "MSG-002", null, null));
 
         interBankFailureOutBoxEventService.processEvent(event);
 

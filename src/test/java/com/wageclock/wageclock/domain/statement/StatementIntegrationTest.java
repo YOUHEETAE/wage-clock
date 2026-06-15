@@ -9,8 +9,6 @@ import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.ewa.EwaTransactionRepository;
-import com.wageclock.wageclock.domain.payment.PaymentRepository;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
@@ -65,8 +63,6 @@ public class StatementIntegrationTest {
     @Autowired EmploymentRepository employmentRepository;
     @Autowired WorkSessionRepository workSessionRepository;
     @Autowired EwaRequestRepository ewaRequestRepository;
-    @Autowired EwaTransactionRepository ewaTransactionRepository;
-    @Autowired PaymentRepository paymentRepository;
     @Autowired PayPeriodRepository payPeriodRepository;
     @MockitoBean VirtualAccountPort virtualAccountPort;
 
@@ -77,8 +73,6 @@ public class StatementIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        ewaTransactionRepository.deleteAll();
-        paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
         payPeriodRepository.deleteAll();

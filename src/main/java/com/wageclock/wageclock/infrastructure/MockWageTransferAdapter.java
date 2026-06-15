@@ -13,13 +13,13 @@ import java.math.BigDecimal;
 public class MockWageTransferAdapter implements WageTransferPort {
 
     @Override
-    public WageTransferResult transfer(Worker worker, BigDecimal amount, Long bulkSettlementItemId) {
-        return new WageTransferResult("mock-transfer-" + bulkSettlementItemId, null);
+    public WageTransferResult transfer(Worker worker, BigDecimal amount, String referenceId) {
+        return new WageTransferResult("mock-transfer-" + referenceId, null, referenceId, null);
     }
 
     @Override
-    public WageTransferResult inquireTransfer(String pendingMessageNo, Long bulkSettlementItemId) {
-        return new WageTransferResult(pendingMessageNo, null);
+    public WageTransferResult inquireTransfer(String pendingMessageNo) {
+        return new WageTransferResult(pendingMessageNo, null, null, null);
     }
 }
 
