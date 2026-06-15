@@ -97,12 +97,6 @@ class BulkSettlementProcessorTest {
     }
 
     @Test
-    void assignTransferId_null_IllegalStateException() {
-        assertThrows(IllegalStateException.class,
-                () -> bulkSettlementProcessor.assignTransferId(1L, null));
-    }
-
-    @Test
     void markPendingInquiry_정상_PENDING_INQUIRY() {
         BulkSettlementItem item = BulkSettlementItem.builder()
                 .bulkSettlement(mock(BulkSettlement.class))

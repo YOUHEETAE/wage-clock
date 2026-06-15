@@ -22,23 +22,23 @@ public class FirmBankingWageTransferAdapter implements WageTransferPort {
     }
 
     @Override
-    public WageTransferResult transfer(Worker worker, BigDecimal amount, Long bulkSettlementItemId) {
-        HectoFinancialTransferResponse response = firmBankingService.transfer(worker, amount);
+    public WageTransferResult transfer(Worker worker, BigDecimal amount, String referenceId) {
+        HectoFinancialTransferResponse response = firmBankingService.transfer(worker, amount, referenceId);
         if ("0000".equals(response.responseCode())) {
-            return new WageTransferResult(response.messageNo(), null);
+            return new WageTransferResult(response.messageNo(), null, referenceId, null);
         }
         // 비정상 응답 → 재조회 필요 (VTIM 포함)
-        return new WageTransferResult(null, response.messageNo());
+        return new WageTransferResult(null, response.messageNo(), referenceId, null);
     }
 
     @Override
-    public WageTransferResult inquireTransfer(String pendingMessageNo, Long bulkSettlementItemId) {
+    public WageTransferResult inquireTransfer(String pendingMessageNo) {
         HectoFinancialInquiryResponse response = firmBankingService.inquireTransferResult(pendingMessageNo);
         if (PROCESSING_CODE.equals(response.processResult())) {
-            return new WageTransferResult(null, pendingMessageNo);
+            return new WageTransferResult(null, pendingMessageNo, null, null);
         }
         if ("0000".equals(response.responseCode()) && "0000".equals(response.processResult())) {
-            return new WageTransferResult(pendingMessageNo, null);
+            return new WageTransferResult(pendingMessageNo, null, null, null);
         }
         throw new ExternalApiException("펌뱅킹 이체 실패 - responseCode: "
                 + response.responseCode() + ", processResult: " + response.processResult());

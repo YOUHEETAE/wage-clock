@@ -93,9 +93,6 @@ public class BulkSettlementProcessor {
     }
     @Transactional
     public void assignTransferId(Long itemId, String transferId) {
-        if (transferId == null) {
-            throw new IllegalStateException("transferId is null");
-        }
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         item.assignTransferId(transferId);

@@ -36,11 +36,11 @@ public class InterBankFailureOutBoxEventService {
         Worker worker = workerRepository.findById(failedItem.getWorkerId())
                         .orElseThrow(() -> new NotFoundException("Worker Not Found"));
         try {
-            WageTransferResult result = wageTransferPort.transfer(worker, failedItem.getAmount(), failedItem.getId());
+            WageTransferResult result = wageTransferPort.transfer(worker, failedItem.getAmount(), "BULK-" + failedItem.getId());
             if (result.transferId() != null) {
                 interBankFailureOutBoxEventResultHandler.saveSuccess(failedItem.getTransferId(), result.transferId(), event);
             } else if (result.pendingMessageNo() != null) {
-                WageTransferResult inquireResult = wageTransferPort.inquireTransfer(result.pendingMessageNo(), failedItem.getId());
+                WageTransferResult inquireResult = wageTransferPort.inquireTransfer(result.pendingMessageNo());
                 if (inquireResult.transferId() != null) {
                     interBankFailureOutBoxEventResultHandler.saveSuccess(failedItem.getTransferId(), inquireResult.transferId(), event);
                 }else {
