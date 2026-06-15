@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "bulk_settlement_item")
+@Table(name = "bulk_settlement_items")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class BulkSettlementItem {

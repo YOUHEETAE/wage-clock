@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,8 +58,8 @@ class BulkSettlementServiceTest {
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
         when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
-        when(wageTransferPort.transfer(worker, BigDecimal.valueOf(50000), 10L))
-                .thenReturn(new WageTransferResult("TX-001", null));
+        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), any()))
+                .thenReturn(new WageTransferResult("TX-001", null, null, null));
 
         bulkSettlementService.initiateBulkSettlement("BULK-001");
 
@@ -74,8 +75,8 @@ class BulkSettlementServiceTest {
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
         when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
-        when(wageTransferPort.transfer(worker, BigDecimal.valueOf(50000), 10L))
-                .thenReturn(new WageTransferResult(null, "MSG-001"));
+        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), any()))
+                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
 
         bulkSettlementService.initiateBulkSettlement("BULK-001");
 
@@ -105,8 +106,8 @@ class BulkSettlementServiceTest {
         BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "TX-OLD", "MSG-001");
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
-        when(wageTransferPort.inquireTransfer("MSG-001", 10L))
-                .thenReturn(new WageTransferResult("TX-001", null));
+        when(wageTransferPort.inquireTransfer("MSG-001"))
+                .thenReturn(new WageTransferResult("TX-001", null, null, null));
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of()));
 
@@ -120,8 +121,8 @@ class BulkSettlementServiceTest {
         BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "TX-OLD", "MSG-001");
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
-        when(wageTransferPort.inquireTransfer("MSG-001", 10L))
-                .thenReturn(new WageTransferResult(null, "MSG-002"));
+        when(wageTransferPort.inquireTransfer("MSG-001"))
+                .thenReturn(new WageTransferResult(null, "MSG-002", null, null));
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of()));
 
@@ -135,7 +136,7 @@ class BulkSettlementServiceTest {
         BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "TX-OLD", "MSG-001");
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
-        when(wageTransferPort.inquireTransfer("MSG-001", 10L))
+        when(wageTransferPort.inquireTransfer("MSG-001"))
                 .thenThrow(new RuntimeException("조회 실패"));
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of()));

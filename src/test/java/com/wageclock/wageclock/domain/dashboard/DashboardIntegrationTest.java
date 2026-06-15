@@ -9,8 +9,6 @@ import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.ewa.EwaTransactionRepository;
-import com.wageclock.wageclock.domain.payment.PaymentRepository;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
@@ -73,13 +71,9 @@ public class DashboardIntegrationTest {
     @Autowired
     EwaRequestRepository ewaRequestRepository;
     @Autowired
-    PaymentRepository paymentRepository;
-    @Autowired
     PayPeriodRepository payPeriodRepository;
     @MockitoBean
     VirtualAccountPort virtualAccountPort;
-    @Autowired
-    EwaTransactionRepository ewaTransactionRepository;
 
     private String workerToken;
     private String employerToken;
@@ -90,8 +84,6 @@ public class DashboardIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        ewaTransactionRepository.deleteAll();
-        paymentRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
         payPeriodRepository.deleteAll();

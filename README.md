@@ -43,17 +43,16 @@ PayPeriod 요약 → 근로자/고용주 모두 조회 가능, 진행 중 세션
 ```
 선지급 중복 요청 방지  → 멱등성 (Idempotency Key)
 동시 선지급 요청 제어  → 분산 락 (Redisson) + Pessimistic Lock (DB 레벨)
-결제 상태 관리         → 상태 머신 (READY → PROCESSING → COMPLETED / FAILED)
-가상계좌 결제 연동     → PortOne V2 REST API (가상계좌 발급 + 웹훅 수신)
-실제 송금 처리         → 오픈뱅킹 미지원으로 가상 계좌 Mock 구현
-                          (실서비스 전환 시 오픈뱅킹 API 연동 필요)
-PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hexagonal Architecture)
+EWA 직접 펌뱅킹        → 고용주 승인 즉시 펌뱅킹 이체, VTIM/UNKNOWN 상태 관리
+                          Scheduler가 주기적으로 미결 이체 재조회 후 상태 반영
+EWA 재이체 (Outbox)    → 타행이체불능 수신 시 EwaTransferFailureOutBoxEvent 생성
+                          Scheduler가 자동 재이체 후 결과에 따라 상태 전이
+가상계좌 결제 연동     → PortOne V2 REST API (일괄 정산 전용 - 가상계좌 발급 + 웹훅 수신)
+PG사 교체 가능 구조    → VirtualAccountPort / WageTransferPort 인터페이스 분리 (Hexagonal Architecture)
 외부 API 트랜잭션 분리 → DB 커넥션 풀 고갈 방지를 위해 외부 API 호출과 @Transactional 분리
-거래 내역 기록         → balance 없이 EwaTransaction으로 거래 이력만 관리
-                          (실서비스 전환 시 오픈뱅킹 API 연동으로 실제 송금 처리)
-장애복구 (Outbox 패턴) → PortOne 가상계좌 발급 / 펌뱅킹 이체 실패 시 Scheduler 기반 자동 재시도
+                          Processor 내부에서 엔티티 재조회로 detached 엔티티 문제 해결
+장애복구 (Outbox 패턴) → 펌뱅킹 이체 실패 시 Scheduler 기반 자동 재시도
                           (Kafka Consumer로 교체 가능한 구조로 설계)
-장애복구 (결제 조회)   → 웹훅 미수신 시 Scheduler가 PortOne 직접 조회 후 상태 반영
 일괄 정산 병렬 처리    → CompletableFuture + ExecutorService로 직원 N명 동시 이체
                           이체 결과를 Sealed Interface로 타입 안전하게 분기 처리
 타행이체불능 재시도    → 펌뱅킹 실패 통보 수신 시 Outbox 패턴으로 자동 재이체
@@ -68,10 +67,21 @@ PG사 교체 가능 구조    → VirtualAccountPort 인터페이스 분리 (Hex
   → 선지급 가능 금액 검증 (적립액 × 30% 한도 내)
   → PENDING 상태로 요청 저장
   → 고용주 승인 (initiateEwa)
-  → 요청 금액만큼 고용주에게 가상계좌 발급 (PortOne) — Payment READY → PROCESSING
-  → 고용주가 해당 가상계좌에 입금
-  → PortOne 웹훅으로 입금 확인 (Transaction.Paid) — Payment COMPLETED, EWA APPROVED
-  → EwaTransaction 기록 (거래 내역 저장)
+  → EwaTransfer 생성 후 직접 펌뱅킹 이체
+       ├─ 성공 (transferId 수신)   → EwaRequest APPROVED, EwaTransfer COMPLETED
+       ├─ VTIM (pendingMessageNo)   → EwaTransfer PENDING_INQUIRY, Scheduler가 주기적으로 재조회
+       ├─ 확정 실패 (failureReason) → EwaTransfer FAILED (잔액부족 등, 재시도 없음 / 운영팀 수동 처리)
+       └─ 예외 (네트워크 오류 등)   → EwaTransfer UNKNOWN, Scheduler가 재조회
+
+타행이체불능 수신 시 (전문번호 3000)
+  → EwaTransfer RETRYING, EwaRequest APPROVED 유지 (승인 사실 불변)
+  → PayPeriod.totalEwaAmount 즉시 환원 (선지급 한도 복구)
+  → EwaTransferFailureOutBoxEvent 생성
+  → Scheduler가 재이체
+       ├─ 성공   → EwaTransfer COMPLETED, PayPeriod.totalEwaAmount 재차감
+       ├─ VTIM   → EwaTransfer PENDING_INQUIRY, OutBoxEvent PROCESSED
+       ├─ 확정실패 → EwaTransfer FAILED (운영팀 수동 처리)
+       └─ MAX_RETRY 초과 → OutBoxEvent FAILED, EwaTransfer UNKNOWN (운영팀 알림 TODO)
 ```
 
 ---
@@ -121,9 +131,8 @@ Employer (고용주)
        └─ PayPeriod (월 단위 정산 기간)
             └─ WorkSession (근무 세션 / 급여시계)
             └─ EwaRequest (선지급 요청)
-                 └─ Payment (결제)
-                 │    └─ PaymentHistory (결제 히스토리)
-                 └─ EwaTransaction (거래 내역)
+                 └─ EwaTransfer (펌뱅킹 이체)
+                      └─ EwaTransferFailureOutBoxEvent (재이체 Outbox)
 ```
 
 ## ERD
@@ -148,10 +157,9 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **PayPeriod.totalEarnedAmount** | 퇴근(clockOut) 시에만 누적 | `+ WorkSession.earnedAmount` |
 | **선지급 한도** | EWA 요청할 때마다 | `(totalEarnedAmount + PAUSED 세션 적립액) × 30% - totalEwaAmount` |
 | **totalEwaAmount** | EWA 요청 시 증가 | `+ requestedAmount` |
-| **totalEwaAmount** | EWA 거절 / 결제 실패 시 감소 | `- requestedAmount` |
+| **totalEwaAmount** | EWA 거절 / 이체 실패 시 감소 | `- requestedAmount` |
 | **실제 지급 월급** | 월급 정산 시 (PayPeriod close) | `확정 번 돈 - totalEwaAmount` |
-| **가상계좌 발급** | 고용주 승인(initiateEwa) 시 | PortOne API 호출 |
-| **근로자 가상계좌 입금** | 웹훅 수신 시 | 입금 확인 후 Mock 처리 |
+| **EWA 펌뱅킹 이체** | 고용주 승인(initiateEwa) 즉시 | Mock 펌뱅킹 API 호출, 결과에 따라 상태 전이 |
 
 ---
 
@@ -188,8 +196,8 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 11: 정산 API (PayPeriod close + 실지급 월급 계산 + 새 PayPeriod 생성)
 ✅ Phase 12: 고용주 대시보드 + PayPeriod 요약 + 고용 이력 타임라인 (JdbcTemplate)
 ✅ Phase 13: 일괄 정산 (Mock 헥토파이낸셜 펌뱅킹 병렬 처리 + Outbox 재시도)
-⬜ Phase 14: EWA 리팩토링 (EWA 가상계좌 발급 제거)
-⬜ Phase 15: Kafka (Outbox Consumer 교체 - 분산 서버 환경 대응)
+✅ Phase 14: EWA 리팩토링 (PortOne 가상계좌 제거 → 직접 펌뱅킹 이체 + VTIM/UNKNOWN 상태 관리 + RETRYING 분리 + Outbox 재이체)
+✅ Phase 15: Settlement 리팩토링 (VTIM/UNKNOWN 상태 관리 + RETRYING 분리 + Outbox 재이체)
 ⬜ Phase 16: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```
 

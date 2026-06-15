@@ -73,7 +73,7 @@ public class BulkSettlementService {
                 .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() -> {
                                     Worker worker = Optional.ofNullable(workerMap.get(context.workerId()))
                                             .orElseThrow(() -> new NotFoundException("Worker not found"));
-                                    WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), context.itemId());
+                                    WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), "BULK-" + context.itemId());
                                     if (result.transferId() != null) {
                                         return new TransferItemResult.Success(context.itemId(), result.transferId());
                                     }
@@ -124,7 +124,7 @@ public class BulkSettlementService {
         BulkSettlementContext inquiryContexts = bulkSettlementProcessor.loadPendingInquiryContexts(portOnePaymentId);
         List<CompletableFuture<TransferItemResult>> inquiryFutures = inquiryContexts.bulkSettlementItemContexts().stream()
                 .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() -> {
-                    WageTransferResult result = wageTransferPort.inquireTransfer(context.pendingMessageNo(), context.itemId());
+                    WageTransferResult result = wageTransferPort.inquireTransfer(context.pendingMessageNo());
                     if (result.transferId() != null) {
                         return new TransferItemResult.Success(context.itemId(), result.transferId());
                     }

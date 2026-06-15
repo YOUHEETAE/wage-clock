@@ -25,7 +25,7 @@ public class FirmBankingService {
         this.redisTemplate = redisTemplate;
     }
 
-    public HectoFinancialTransferResponse transfer(Worker worker, BigDecimal amount) {
+    public HectoFinancialTransferResponse transfer(Worker worker, BigDecimal amount, String referenceId) {
         String messageNo = generateMessageNo();
         LocalDateTime now = LocalDateTime.now();
 

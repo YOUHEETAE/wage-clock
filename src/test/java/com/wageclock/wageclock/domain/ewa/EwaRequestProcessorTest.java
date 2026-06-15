@@ -3,6 +3,7 @@ package com.wageclock.wageclock.domain.ewa;
 import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
+import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,14 +60,16 @@ public class EwaRequestProcessorTest {
     @Test
     void 정상_요청_시_응답_반환() {
         when(employment.getWorkerId()).thenReturn(1L);
-        when(ewaRequestRepository.save(any())).thenReturn(ewaRequest);
-        when(ewaRequest.getId()).thenReturn(1L);
-        when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.ONE);
-        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
         PayPeriod payPeriod = new PayPeriod(employment);
         payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
         when(payPeriodRepository.findByEmploymentAndStatusWithLock(
                 1L, PayPeriod.PayPeriodStatus.ACTIVE)).thenReturn(Optional.of(payPeriod));
+        when(workSessionRepository.findByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.PAUSED))
+                .thenReturn(Optional.empty());
+        when(ewaRequestRepository.save(any())).thenReturn(ewaRequest);
+        when(ewaRequest.getId()).thenReturn(1L);
+        when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.ONE);
+        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
         EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
         EwaResponseDto ewaResponseDto = new EwaResponseDto(1L, BigDecimal.ONE, EwaRequest.EwaRequestStatus.PENDING);
         assertEquals(ewaResponseDto, ewaRequestProcessor.processEwaRequest(ewaRequestDto, 1L));

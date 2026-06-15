@@ -9,31 +9,26 @@ import java.util.List;
 @Component
 public class OutBoxScheduler {
 
-    private final EwaOutBoxEventRepository ewaOutBoxEventRepository;
-    private final EwaOutBoxService ewaOutBoxService;
     private final BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository;
     private final BulkSettlementOutBoxService bulkSettlementOutBoxService;
     private final InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
     private final InterBankFailureOutBoxEventService interBankFailureOutBoxEventService;
+    private final EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository;
+    private final EwaTransferFailureOutBoxService ewaTransferFailureOutBoxService;
 
-    public OutBoxScheduler(EwaOutBoxEventRepository ewaOutBoxEventRepository,
-                           EwaOutBoxService ewaOutBoxService,
-                           BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository,
-                           BulkSettlementOutBoxService bulkSettlementOutBoxService,
-                           InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository,
-                           InterBankFailureOutBoxEventService interBankFailureOutBoxEventService) {
-        this.ewaOutBoxEventRepository = ewaOutBoxEventRepository;
-        this.ewaOutBoxService = ewaOutBoxService;
+    public OutBoxScheduler(
+            BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository,
+            BulkSettlementOutBoxService bulkSettlementOutBoxService,
+            InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository,
+            InterBankFailureOutBoxEventService interBankFailureOutBoxEventService,
+            EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository,
+            EwaTransferFailureOutBoxService ewaTransferFailureOutBoxService) {
         this.bulkSettlementOutBoxEventRepository = bulkSettlementOutBoxEventRepository;
         this.bulkSettlementOutBoxService = bulkSettlementOutBoxService;
         this.interBankFailureOutBoxEventRepository = interBankFailureOutBoxEventRepository;
         this.interBankFailureOutBoxEventService = interBankFailureOutBoxEventService;
-    }
-    @Scheduled(fixedDelay = 30000)
-    public void processEwaOutBoxEvent(){
-        List<EwaOutBoxEvent> events = ewaOutBoxEventRepository
-                .findByStatus(EwaOutBoxEvent.OutBoxStatus.PENDING);
-        events.forEach(ewaOutBoxService::processEvent);
+        this.ewaTransferFailureOutBoxRepository = ewaTransferFailureOutBoxRepository;
+        this.ewaTransferFailureOutBoxService = ewaTransferFailureOutBoxService;
     }
     @Scheduled(fixedDelay = 30000)
     public void processBulkSettlementOutBoxEvent(){
@@ -46,5 +41,11 @@ public class OutBoxScheduler {
         List<InterBankFailureOutBoxEvent> events = interBankFailureOutBoxEventRepository
                 .findByStatus(InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.PENDING);
         events.forEach(interBankFailureOutBoxEventService::processEvent);
+    }
+    @Scheduled(fixedDelay = 30000)
+    public void processEwaTransferFailureOutBoxEvent(){
+        List<EwaTransferFailureOutBoxEvent> events = ewaTransferFailureOutBoxRepository
+                .findByStatus(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PENDING);
+        events.forEach(ewaTransferFailureOutBoxService::processEvent);
     }
 }
