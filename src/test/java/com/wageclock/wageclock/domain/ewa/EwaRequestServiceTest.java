@@ -1,8 +1,6 @@
 package com.wageclock.wageclock.domain.ewa;
 
-import com.wageclock.wageclock.domain.payment.Payment;
-import com.wageclock.wageclock.domain.payment.PortOnePaymentService;
-import com.wageclock.wageclock.domain.port.VirtualAccountResult;
+import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferService;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import org.junit.jupiter.api.Test;
@@ -27,10 +25,9 @@ public class EwaRequestServiceTest {
     @Mock EwaRequestRepository ewaRequestRepository;
     @Mock RedissonClient redissonClient;
     @Mock RLock lock;
-    @Mock PortOnePaymentService portOnePaymentService;
     @Mock EwaRequest ewaRequest;
-    @Mock Payment payment;
     @Mock EwaRequestProcessor ewaRequestProcessor;
+    @Mock EwaTransferService ewaTransferService;
     @Mock PayPeriod payPeriod;
     @Mock PayPeriodRepository payPeriodRepository;
 
@@ -48,27 +45,21 @@ public class EwaRequestServiceTest {
     @Test
     void 정상_승인() {
         when(ewaRequestProcessor.validateAndLockEwa(1L, 1L)).thenReturn(ewaRequest);
-        when(ewaRequest.getStatus())
-                .thenReturn(EwaRequest.EwaRequestStatus.PENDING);
-        when(portOnePaymentService.processPayment(any())).thenReturn(payment);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
-        when(payment.getPortOnePaymentId()).thenReturn("test-id");
-        when(portOnePaymentService.getAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
+        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
 
         InitiateEwaResponse response = ewaRequestService.initiateEwa(1L, 1L);
+
+        assertEquals(1L, response.ewaRequestId());
+        assertEquals(BigDecimal.valueOf(100), response.amount());
         assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.status());
     }
 
     @Test
     void 정상_거절() {
-        when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.of(ewaRequest));
-        when(ewaRequest.getStatus())
-                .thenReturn(EwaRequest.EwaRequestStatus.PENDING)
-                .thenReturn(EwaRequest.EwaRequestStatus.REJECTED);
-        when(ewaRequest.getEmployerId()).thenReturn(1L);
+        when(ewaRequestProcessor.validateAndLockEwa(1L, 1L)).thenReturn(ewaRequest);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
-        when(ewaRequest.getPayPeriod()).thenReturn(payPeriod);
+        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.REJECTED);
 
         EwaResponseDto response = ewaRequestService.rejectEwa(1L, 1L);
         assertEquals(EwaRequest.EwaRequestStatus.REJECTED, response.status());

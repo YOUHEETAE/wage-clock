@@ -15,11 +15,6 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class OutBoxSchedulerTest {
-    @Mock
-    EwaOutBoxEventRepository ewaOutBoxEventRepository;
-
-    @Mock
-    EwaOutBoxService ewaOutBoxService;
 
     @InjectMocks
     OutBoxScheduler outBoxScheduler;
@@ -32,19 +27,10 @@ public class OutBoxSchedulerTest {
 
     @Mock InterBankFailureOutBoxEventService interBankFailureOutBoxEventService;
 
-    @Test
-    void processEwaOutBoxEvent_검증(){
-        EwaOutBoxEvent event = EwaOutBoxEvent.builder()
-                .portOnePaymentId("test-id")
-                .ewaRequestId(1L)
-                .amount(BigDecimal.valueOf(10000))
-                .employerName("홍길동")
-                .build();
-        when(ewaOutBoxEventRepository.findByStatus(any())).thenReturn(List.of(event));
-        outBoxScheduler.processEwaOutBoxEvent();
-        verify(ewaOutBoxEventRepository).findByStatus(any());
-        verify(ewaOutBoxService).processEvent(any());
-    }
+    @Mock EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository;
+
+    @Mock EwaTransferFailureOutBoxService ewaTransferFailureOutBoxService;
+
 
     @Test
     void processBulkSettlementOutBoxEvent_검증() {
@@ -71,5 +57,18 @@ public class OutBoxSchedulerTest {
         outBoxScheduler.processInterBankFailureOutBoxEvent();
         verify(interBankFailureOutBoxEventRepository).findByStatus(any());
         verify(interBankFailureOutBoxEventService).processEvent(any());
+    }
+
+    @Test
+    void processEwaTransferFailureOutBoxEvent_검증(){
+        EwaTransferFailureOutBoxEvent event = EwaTransferFailureOutBoxEvent.builder()
+                .ewaTransferId(1L)
+                .transferId("TX-001")
+                .amount(BigDecimal.valueOf(100000))
+                .build();
+        when(ewaTransferFailureOutBoxRepository.findByStatus(any())).thenReturn(List.of(event));
+        outBoxScheduler.processEwaTransferFailureOutBoxEvent();
+        verify(ewaTransferFailureOutBoxRepository).findByStatus(any());
+        verify(ewaTransferFailureOutBoxService).processEvent(any());
     }
 }

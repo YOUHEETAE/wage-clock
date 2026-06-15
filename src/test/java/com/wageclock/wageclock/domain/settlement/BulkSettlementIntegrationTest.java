@@ -198,7 +198,7 @@ public class BulkSettlementIntegrationTest {
         when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
                 .thenReturn(new VirtualAccountResult("Toss", "1234-5678", "2026-12-31"));
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null));
+                .thenReturn(new WageTransferResult("TX-001", null, null, null));
 
         testRestTemplate.postForEntity("/api/settlement/request",
                 new HttpEntity<>(List.of(employmentId), employerHeaders()),
@@ -223,7 +223,7 @@ public class BulkSettlementIntegrationTest {
         when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
                 .thenReturn(new VirtualAccountResult("Toss", "1234-5678", "2026-12-31"));
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult(null, "MSG-001"));
+                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
 
         testRestTemplate.postForEntity("/api/settlement/request",
                 new HttpEntity<>(List.of(employmentId), employerHeaders()),
@@ -246,15 +246,15 @@ public class BulkSettlementIntegrationTest {
         when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
                 .thenReturn(new VirtualAccountResult("Toss", "1234-5678", "2026-12-31"));
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult(null, "MSG-001"));
+                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
 
         requestAndTriggerSettlement(List.of(employmentId));
 
         assertEquals(BulkSettlement.BulkSettlementStatus.TRANSFER_FAILED,
                 bulkSettlementRepository.findAll().get(0).getStatus());
 
-        when(wageTransferPort.inquireTransfer(any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null));
+        when(wageTransferPort.inquireTransfer(any()))
+                .thenReturn(new WageTransferResult("TX-001", null, null, null));
         bulkSettlementScheduler.retryFailedTransfers();
 
         BulkSettlement settlement = bulkSettlementRepository.findAll().get(0);
@@ -271,7 +271,7 @@ public class BulkSettlementIntegrationTest {
         when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
                 .thenReturn(new VirtualAccountResult("Toss", "1234-5678", "2026-12-31"));
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null))
+                .thenReturn(new WageTransferResult("TX-001", null, null, null))
                 .thenThrow(new RuntimeException("이체 실패"));
 
         requestAndTriggerSettlement(List.of(employmentId, employmentId2));
@@ -294,7 +294,7 @@ public class BulkSettlementIntegrationTest {
         when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
                 .thenReturn(new VirtualAccountResult("Toss", "1234-5678", "2026-12-31"));
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null));
+                .thenReturn(new WageTransferResult("TX-001", null, null, null));
 
         testRestTemplate.postForEntity("/api/settlement/request",
                 new HttpEntity<>(List.of(employmentId), employerHeaders()),
@@ -307,8 +307,9 @@ public class BulkSettlementIntegrationTest {
                 Void.class);
 
         // 3000/100 타행이체불능 수신
+        Long itemId = bulkSettlementItemRepository.findAll().get(0).getId();
         ResponseEntity<Void> response = testRestTemplate.postForEntity("/mock/firm-banking/3000",
-                new HttpEntity<>(new InterBankFailureNotification("TX-001"), new HttpHeaders()),
+                new HttpEntity<>(new InterBankFailureNotification("TX-001", "BULK-" + itemId), new HttpHeaders()),
                 Void.class);
         System.out.println(response.getStatusCode()); // 200이어야 함
 
@@ -319,7 +320,7 @@ public class BulkSettlementIntegrationTest {
 
         // 재이체 성공
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-002", null));
+                .thenReturn(new WageTransferResult("TX-002", null, null, null));
         outBoxScheduler.processInterBankFailureOutBoxEvent();
 
         BulkSettlementItem retried = bulkSettlementItemRepository.findAll().get(0);

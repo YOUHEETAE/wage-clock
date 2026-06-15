@@ -74,4 +74,11 @@ public class EwaRequestProcessor {
         }
         return ewaRequest;
     }
+    @Transactional
+    public void processRejectEwa(EwaRequest ewaRequest){
+        ewaRequest.rejected();
+        ewaRequestRepository.save(ewaRequest);
+        ewaRequest.getPayPeriod().subtractEwaAmount(ewaRequest.getRequestedAmount());
+        payPeriodRepository.save(ewaRequest.getPayPeriod());
+    }
 }

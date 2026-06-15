@@ -1,5 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
+import com.wageclock.wageclock.domain.EwaTransfer.EwaTransfer;
+import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferRepository;
 import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
@@ -8,16 +10,12 @@ import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
 import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.payment.PaymentRepository;
-import com.wageclock.wageclock.domain.port.VirtualAccountPort;
-import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
 import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
-import com.wageclock.wageclock.infrastructure.PortOneWebhookPayload;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,19 +25,17 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -67,10 +63,8 @@ public class EwaIntegrationTest {
     @Autowired EmploymentRepository employmentRepository;
     @Autowired WorkSessionRepository workSessionRepository;
     @Autowired EwaRequestRepository ewaRequestRepository;
-    @Autowired PaymentRepository paymentRepository;
+    @Autowired EwaTransferRepository ewaTransferRepository;
     @Autowired PayPeriodRepository payPeriodRepository;
-    @MockitoBean VirtualAccountPort virtualAccountPort;
-    @Autowired EwaTransactionRepository ewaTransactionRepository;
 
     private String workerToken;
     private String employerToken;
@@ -79,8 +73,7 @@ public class EwaIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        ewaTransactionRepository.deleteAll();
-        paymentRepository.deleteAll();
+        ewaTransferRepository.deleteAll();
         ewaRequestRepository.deleteAll();
         workSessionRepository.deleteAll();
         payPeriodRepository.deleteAll();
@@ -192,8 +185,6 @@ public class EwaIntegrationTest {
 
     @Test
     void 정상_EWA_승인() {
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
 
@@ -203,7 +194,7 @@ public class EwaIntegrationTest {
                 InitiateEwaResponse.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.getBody().status());
+        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, response.getBody().status());
     }
 
     @Test
@@ -221,8 +212,6 @@ public class EwaIntegrationTest {
 
     @Test
     void 다른_고용주_승인_시도_실패() {
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
 
@@ -260,25 +249,18 @@ public class EwaIntegrationTest {
     }
 
     @Test
-    void EWA_APPROVE_검증(){
-        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
-                .thenReturn(new VirtualAccountResult("SHINHAN", "123456", "2026-05-07"));
+    void EWA_APPROVE_검증() {
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        HttpHeaders headers = employerHeaders();
         testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
-                new HttpEntity<>(null, headers), InitiateEwaResponse.class);
-        String portOnePaymentId = paymentRepository.findAll().get(0).getPortOnePaymentId();
-        ResponseEntity<Void> webhookResponse = testRestTemplate.postForEntity(
-                "/webhook",
-                new PortOneWebhookPayload("Transaction.Paid", "",
-                        new PortOneWebhookPayload.Data("", portOnePaymentId, "")), Void.class);
-        assertEquals(HttpStatus.OK, webhookResponse.getStatusCode());
+                new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
+
         EwaRequest.EwaRequestStatus status = ewaRequestRepository.findById(ewaId).get().getStatus();
         assertEquals(EwaRequest.EwaRequestStatus.APPROVED, status);
-        EwaTransaction ewaTransactions = ewaTransactionRepository.findAll().get(0);
-        assertEquals(1, ewaTransactionRepository.findAll().size());
-        assertEquals(ewaId, ewaTransactions.getEwaRequest().getId());
-        assertEquals(0, BigDecimal.valueOf(100).compareTo(ewaTransactions.getAmount()));
+
+        List<EwaTransfer> transfers = ewaTransferRepository.findAll();
+        assertEquals(1, transfers.size());
+        assertEquals(EwaTransfer.EwaTransferStatus.COMPLETED, transfers.get(0).getStatus());
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(transfers.get(0).getAmount()));
     }
     @Test
     void 거절_후_한도_복구_재요청_성공(){

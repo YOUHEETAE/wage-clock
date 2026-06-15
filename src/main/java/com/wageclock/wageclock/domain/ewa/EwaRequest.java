@@ -2,6 +2,7 @@ package com.wageclock.wageclock.domain.ewa;
 
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -47,7 +48,8 @@ public class EwaRequest extends BaseEntity {
         PENDING,
         APPROVED,
         REJECTED,
-        FAILED
+        FAILED,
+        UNKNOWN
     }
 
     public void approved(){
@@ -67,8 +69,18 @@ public class EwaRequest extends BaseEntity {
         return this.payPeriod.getEmployment().getEmployer();
     }
 
-    public String getEmployerName() {
-        return this.payPeriod.getEmployment().getEmployer().getName();
+    public Worker getWorker() {
+        return this.payPeriod.getEmployment().getWorker();
+    }
+    public void unknown(){
+        this.status = EwaRequestStatus.UNKNOWN;
+    }
+    public void failWithRefund(BigDecimal amount){
+        this.status = EwaRequestStatus.FAILED;
+        this.payPeriod.subtractEwaAmount(amount);
+    }
+    public void refundEwa(BigDecimal amount){
+        this.payPeriod.subtractEwaAmount(amount);
     }
 
 }
