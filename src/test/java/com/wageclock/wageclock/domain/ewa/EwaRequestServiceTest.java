@@ -12,7 +12,6 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 
 import java.math.BigDecimal;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -46,7 +45,7 @@ public class EwaRequestServiceTest {
     void 정상_승인() {
         when(ewaRequestProcessor.validateAndLockEwa(1L, 1L)).thenReturn(ewaRequest);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
-        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
+        when(ewaTransferService.processTransfer(ewaRequest)).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
 
         InitiateEwaResponse response = ewaRequestService.initiateEwa(1L, 1L);
 
@@ -54,6 +53,7 @@ public class EwaRequestServiceTest {
         assertEquals(BigDecimal.valueOf(100), response.amount());
         assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.status());
     }
+
 
     @Test
     void 정상_거절() {

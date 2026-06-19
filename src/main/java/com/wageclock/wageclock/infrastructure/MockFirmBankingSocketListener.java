@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.infrastructure;
 
 import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferService;
+import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
@@ -23,11 +24,10 @@ public class MockFirmBankingSocketListener {
     @PostMapping("/3000")
     public ResponseEntity<Void> receiveInterBankFailure(
             @RequestBody InterBankFailureNotification notification) {
-        String referenceId = notification.referenceId();
-        if (referenceId.startsWith("BULK-")) {
-            bulkSettlementService.receiveInterBankFailure(notification.transferId());
-        } else if (referenceId.startsWith("EWA-")) {
-            ewaTransferService.receiveInterBankFailure(notification.transferId());
+        String messageNo = notification.originalMessageNo();
+        switch (TransferType.fromTransferId(messageNo)) {
+            case EWA -> ewaTransferService.receiveInterBankFailure(messageNo);
+            case BULK_SETTLEMENT -> bulkSettlementService.receiveInterBankFailure(messageNo);
         }
         //todo : 실제 연동시 통지 수신 후 응답전문 전송 필요
         return ResponseEntity.ok().build();

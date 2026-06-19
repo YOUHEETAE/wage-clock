@@ -31,67 +31,81 @@ public class EwaTransferProcessor {
     }
 
     @Transactional
-    public void assignTransferId(String transferId, Long ewaTransferId){
+    public void assignMessageNo(Long ewaTransferId ,String messageNo){
+        EwaTransfer ewaTransfer = ewaTransferRepository.findById(ewaTransferId)
+                .orElseThrow(() -> new NotFoundException("EwaTransfer not found"));
+        ewaTransfer.assignMessageNo(messageNo);
+    }
+
+    @Transactional
+    public void completeTransfer(Long ewaTransferId){
         EwaTransfer ewaTransfer = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("Transfer not found"));
-        ewaTransfer.assignTransferId(transferId);
+        ewaTransfer.completed();
         ewaTransfer.getEwaRequest().approved();
         ewaTransfer.getEwaRequest().getPayPeriod().addEwaAmount(ewaTransfer.getAmount());
     }
 
     @Transactional
-    public void markPendingInquiry(String pendingMessageNo, Long ewaTransferId){
+    public void markPendingInquiry(Long ewaTransferId){
         EwaTransfer ewaTransfer = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("Transfer not found"));
-        ewaTransfer.markPendingInquiry(pendingMessageNo);
+        ewaTransfer.markPendingInquiry();
     }
 
+
+
+
     @Transactional
-    public void markFailed(Long ewaTransferId){
+    public void failTransfer(Long ewaTransferId){
         EwaTransfer ewaTransfer = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("Transfer not found"));
-        ewaTransfer.markFailed();
+        ewaTransfer.failed();
         ewaTransfer.getEwaRequest().failed();
     }
     @Transactional
-    public void markUnknown(Long ewaTransferId){
+    public void unknownTransfer(Long ewaTransferId){
         EwaTransfer ewaTransfer = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("Transfer not found"));
-        ewaTransfer.markUnknown();
+        ewaTransfer.unknown();
         ewaTransfer.getEwaRequest().unknown();
     }
     @Transactional
     public void receiveInterBankFailure(String transferId){
-        EwaTransfer ewaTransfer = ewaTransferRepository.findByTransferId(transferId)
+        EwaTransfer ewaTransfer = ewaTransferRepository.findByMessageNo(transferId)
                 .orElseThrow(() -> new NotFoundException("ewaTransfer not found"));
-        ewaTransfer.markRetrying();
+        ewaTransfer.retrying();
         ewaTransfer.getEwaRequest().refundEwa(ewaTransfer.getAmount());
         EwaTransferFailureOutBoxEvent event = EwaTransferFailureOutBoxEvent.builder()
                 .ewaTransferId(ewaTransfer.getId())
-                .transferId(transferId)
+                .messageNo(transferId)
                 .amount(ewaTransfer.getAmount()).build();
         ewaTransferFailureOutBoxRepository.save(event);
     }
 
     @Transactional
-    public void completeRetry(String transferId, Long ewaTransferId){
+    public void completeRetry(Long ewaTransferId){
         EwaTransfer managed = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
-        managed.assignTransferId(transferId);
+        managed.completed();
         managed.getEwaRequest().getPayPeriod().addEwaAmount(managed.getAmount());
     }
 
     @Transactional
-    public void markRetryFailed(Long ewaTransferId){
+    public void failRetry(Long ewaTransferId){
         EwaTransfer managed = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
-        managed.markFailed();
+        managed.failed();
     }
 
     @Transactional
-    public void markRetryUnknown(Long ewaTransferId){
+    public void unKnownRetry(Long ewaTransferId){
         EwaTransfer managed = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
-        managed.markUnknown();
+        managed.unknown();
     }
+
+
+
+
 }

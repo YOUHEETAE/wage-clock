@@ -3,6 +3,7 @@ package com.wageclock.wageclock.domain.outbox;
 import com.wageclock.wageclock.domain.EwaTransfer.EwaTransfer;
 import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferProcessor;
 import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferRepository;
+import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
 import com.wageclock.wageclock.domain.worker.Worker;
@@ -33,27 +34,54 @@ public class EwaTransferFailureOutBoxService {
     }
 
     public void processEvent(EwaTransferFailureOutBoxEvent event) {
-        EwaTransfer failedTransfer = ewaTransferRepository.findByIdWithWorker(event.getEwaTransferId())
+        EwaTransfer ewaTransfer = ewaTransferRepository.findByIdWithWorker(event.getEwaTransferId())
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
-        Long failedTransferId = failedTransfer.getId();
-        Worker worker = failedTransfer.getWorker();
+        Long transferId = ewaTransfer.getId();
+        Worker worker = ewaTransfer.getWorker();
         try{
-            WageTransferResult result = wageTransferPort.transfer(worker, failedTransfer.getAmount(),
-                    "EWA-" + failedTransfer.getId());
+            WageTransferResult result;
+            if(ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.PENDING_INQUIRY
+                    || ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.UNKNOWN){
+                result = wageTransferPort.inquireTransfer(ewaTransfer.getMessageNo());
+            }else{
+                String messageNo = wageTransferPort.prepareTransfer(TransferType.EWA);
+                ewaTransferProcessor.assignMessageNo(transferId, messageNo);
+                result = wageTransferPort.transfer(worker, ewaTransfer.getAmount(), messageNo);
+            }
             if(result.transferId() != null){
-                ewaTransferFailureOutBoxResultHandler.saveSuccess(failedTransfer, result.transferId(), event);
+                ewaTransferFailureOutBoxResultHandler.saveSuccess(ewaTransfer, event);
             }else if(result.pendingMessageNo() != null){
-                ewaTransferProcessor.markPendingInquiry(result.pendingMessageNo(), failedTransferId);
+                ewaTransferProcessor.markPendingInquiry(transferId);
                 event.processed();
                 ewaTransferFailureOutBoxRepository.save(event);
             }else if(result.failureReason() != null){
-                ewaTransferProcessor.markRetryFailed(failedTransferId);
+                ewaTransferProcessor.failRetry(transferId);
+                event.failed();
+                ewaTransferFailureOutBoxRepository.save(event);
+            }else{
+                event.incrementRetryCount();
+                if(event.getStatus() == EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.FAILED){
+                    ewaTransferProcessor.failRetry(transferId);
+                    event.failed();
+                    //todo : 확정 실패시 알림 발송 필요
+                    ewaTransferFailureOutBoxRepository.save(event);
+                }else{
+                    ewaTransferProcessor.unKnownRetry(transferId);
+                    ewaTransferFailureOutBoxRepository.save(event);
+                }
             }
         }catch(Exception e){
-            log.error("이체 결과 조회 실패 EwaTransferId={}", failedTransfer.getId(), e);
+            log.error("이체 결과 조회 실패 EwaTransferId={}", ewaTransfer.getId(), e);
             event.incrementRetryCount();
-            ewaTransferFailureOutBoxRepository.save(event);
-            ewaTransferProcessor.markRetryUnknown(failedTransferId);
+            if(event.getStatus() == EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.FAILED){
+                ewaTransferProcessor.failRetry(transferId);
+                event.failed();
+                //todo : 확정 실패시 알림 발송 필요
+                ewaTransferFailureOutBoxRepository.save(event);
+            }else{
+                ewaTransferProcessor.unKnownRetry(transferId);
+                ewaTransferFailureOutBoxRepository.save(event);
+            }
         }
 
     }

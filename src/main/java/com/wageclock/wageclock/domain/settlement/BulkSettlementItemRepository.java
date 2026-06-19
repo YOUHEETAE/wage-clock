@@ -2,6 +2,7 @@ package com.wageclock.wageclock.domain.settlement;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -17,7 +18,14 @@ public interface BulkSettlementItemRepository extends JpaRepository<BulkSettleme
             String portOnePaymentId,
             List<BulkSettlementItem.BulkSettlementItemStatus> statuses
     );
-    @EntityGraph(attributePaths = {"payPeriod", "payPeriod.employment"})
-    Optional<BulkSettlementItem> findByTransferId(String transferId);
+
+    Optional<BulkSettlementItem> findByMessageNo(String messageNo);
+
+    @Query("SELECT i FROM BulkSettlementItem i " +
+            "JOIN FETCH i.payPeriod pp " +
+            "JOIN FETCH pp.employment emp " +
+            "WHERE i.id = :id")
+    Optional<BulkSettlementItem> findByIdWithEmployment(Long id);
+
 
 }

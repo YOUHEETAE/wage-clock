@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.EwaTransfer;
 
 import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
 import com.wageclock.wageclock.domain.worker.Worker;
@@ -33,18 +34,20 @@ class EwaTransferServiceTest {
     }
 
     @Test
-    void processTransfer_이체성공_assignTransferId_호출() {
+    void processTransfer_이체성공_completed_호출() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = buildMockTransfer();
         when(ewaTransferProcessor.createEwaTransfer(ewaRequest)).thenReturn(ewaTransfer);
-        when(wageTransferPort.transfer(any(), any(), eq("EWA-1")))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-001");
+        when(wageTransferPort.transfer(any(), any(), eq("MSG-001")))
+                .thenReturn(new WageTransferResult("MSG-001", null, null));
 
         ewaTransferService.processTransfer(ewaRequest);
 
-        verify(ewaTransferProcessor).assignTransferId("TX-001", 1L);
-        verify(ewaTransferProcessor, never()).markFailed(any());
-        verify(ewaTransferProcessor, never()).markUnknown(any());
+        verify(ewaTransferProcessor).assignMessageNo(1L, "MSG-001");
+        verify(ewaTransferProcessor).completeTransfer(1L);
+        verify(ewaTransferProcessor, never()).failTransfer(any());
+        verify(ewaTransferProcessor, never()).unknownTransfer(any());
     }
 
     @Test
@@ -52,93 +55,96 @@ class EwaTransferServiceTest {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = buildMockTransfer();
         when(ewaTransferProcessor.createEwaTransfer(ewaRequest)).thenReturn(ewaTransfer);
-        when(wageTransferPort.transfer(any(), any(), eq("EWA-1")))
-                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-001");
+        when(wageTransferPort.transfer(any(), any(), eq("MSG-001")))
+                .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
         ewaTransferService.processTransfer(ewaRequest);
 
-        verify(ewaTransferProcessor).markPendingInquiry("MSG-001", 1L);
-        verify(ewaTransferProcessor, never()).assignTransferId(any(), any());
+        verify(ewaTransferProcessor).markPendingInquiry(1L);
+        verify(ewaTransferProcessor, never()).completeTransfer(any());
     }
 
     @Test
-    void processTransfer_확정실패_markFailed_호출() {
+    void processTransfer_확정실패_failed_호출() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = buildMockTransfer();
         when(ewaTransferProcessor.createEwaTransfer(ewaRequest)).thenReturn(ewaTransfer);
-        when(wageTransferPort.transfer(any(), any(), eq("EWA-1")))
-                .thenReturn(new WageTransferResult(null, null, null, "계좌 없음"));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-001");
+        when(wageTransferPort.transfer(any(), any(), eq("MSG-001")))
+                .thenReturn(new WageTransferResult(null, null, "계좌 없음"));
 
         ewaTransferService.processTransfer(ewaRequest);
 
-        verify(ewaTransferProcessor).markFailed(1L);
-        verify(ewaTransferProcessor, never()).assignTransferId(any(), any());
+        verify(ewaTransferProcessor).failTransfer(1L);
+        verify(ewaTransferProcessor, never()).completeTransfer(any());
     }
 
     @Test
-    void processTransfer_예외발생_markUnknown_호출() {
+    void processTransfer_예외발생_unknown_호출() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = buildMockTransfer();
         when(ewaTransferProcessor.createEwaTransfer(ewaRequest)).thenReturn(ewaTransfer);
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-001");
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenThrow(new RuntimeException("네트워크 오류"));
 
         ewaTransferService.processTransfer(ewaRequest);
 
-        verify(ewaTransferProcessor).markUnknown(1L);
-        verify(ewaTransferProcessor, never()).assignTransferId(any(), any());
+        verify(ewaTransferProcessor).unknownTransfer(1L);
+        verify(ewaTransferProcessor, never()).completeTransfer(any());
     }
 
     @Test
-    void inquiryTransfer_조회성공_assignTransferId_호출() {
+    void inquiryTransfer_조회성공_completed_호출() {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getId()).thenReturn(1L);
-        when(ewaTransfer.getPendingMessageNo()).thenReturn("MSG-001");
+        when(ewaTransfer.getMessageNo()).thenReturn("MSG-001");
         when(wageTransferPort.inquireTransfer("MSG-001"))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("MSG-001", null, null));
 
         ewaTransferService.inquiryTransfer(ewaTransfer);
 
-        verify(ewaTransferProcessor).assignTransferId("TX-001", 1L);
+        verify(ewaTransferProcessor).completeTransfer(1L);
     }
 
     @Test
     void inquiryTransfer_VTIM_markPendingInquiry_갱신() {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getId()).thenReturn(1L);
-        when(ewaTransfer.getPendingMessageNo()).thenReturn("MSG-001");
+        when(ewaTransfer.getMessageNo()).thenReturn("MSG-001");
         when(wageTransferPort.inquireTransfer("MSG-001"))
-                .thenReturn(new WageTransferResult(null, "MSG-002", null, null));
+                .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
         ewaTransferService.inquiryTransfer(ewaTransfer);
 
-        verify(ewaTransferProcessor).markPendingInquiry("MSG-002", 1L);
+        verify(ewaTransferProcessor).markPendingInquiry(1L);
     }
 
     @Test
-    void inquiryTransfer_확정실패_markFailed_호출() {
+    void inquiryTransfer_확정실패_failed_호출() {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getId()).thenReturn(1L);
-        when(ewaTransfer.getPendingMessageNo()).thenReturn("MSG-001");
+        when(ewaTransfer.getMessageNo()).thenReturn("MSG-001");
         when(wageTransferPort.inquireTransfer("MSG-001"))
-                .thenReturn(new WageTransferResult(null, null, null, "이체 실패"));
+                .thenReturn(new WageTransferResult(null, null, "이체 실패"));
 
         ewaTransferService.inquiryTransfer(ewaTransfer);
 
-        verify(ewaTransferProcessor).markFailed(1L);
+        verify(ewaTransferProcessor).failTransfer(1L);
     }
 
     @Test
-    void inquiryTransfer_예외발생_markUnknown_호출() {
+    void inquiryTransfer_예외발생_unknown_호출() {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getId()).thenReturn(1L);
-        when(ewaTransfer.getPendingMessageNo()).thenReturn("MSG-001");
+        when(ewaTransfer.getMessageNo()).thenReturn("MSG-001");
         when(wageTransferPort.inquireTransfer("MSG-001"))
                 .thenThrow(new RuntimeException("타임아웃"));
 
         ewaTransferService.inquiryTransfer(ewaTransfer);
 
-        verify(ewaTransferProcessor).markUnknown(1L);
+        verify(ewaTransferProcessor).unknownTransfer(1L);
     }
 
     @Test

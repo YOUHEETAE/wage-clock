@@ -2,10 +2,7 @@ package com.wageclock.wageclock.domain.settlement;
 
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.port.VirtualAccountPort;
-import com.wageclock.wageclock.domain.port.VirtualAccountResult;
-import com.wageclock.wageclock.domain.port.WageTransferPort;
-import com.wageclock.wageclock.domain.port.WageTransferResult;
+import com.wageclock.wageclock.domain.port.*;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
@@ -73,16 +70,23 @@ public class BulkSettlementService {
                 .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() -> {
                                     Worker worker = Optional.ofNullable(workerMap.get(context.workerId()))
                                             .orElseThrow(() -> new NotFoundException("Worker not found"));
-                                    WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), "BULK-" + context.itemId());
+                                    String messageNo = wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT);
+                                    bulkSettlementProcessor.assignMessageNo(context.itemId(), messageNo);
+                                    WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), messageNo);
                                     if (result.transferId() != null) {
                                         return new TransferItemResult.Success(context.itemId(), result.transferId());
+                                    }else if(result.pendingMessageNo() != null) {
+
+                                        return new TransferItemResult.PendingInquiry(context.itemId(), result.pendingMessageNo());
+                                    } else if (result.failureReason() != null) {
+                                        return new TransferItemResult.Fail(context.itemId(), result.failureReason());
+                                        //todo : 확정 실패시 알림 발송 필요
                                     }
-                                    return new TransferItemResult.PendingInquiry(context.itemId(), result.pendingMessageNo());
+                                    return new TransferItemResult.Unknown(context.itemId());
                                 }, settlementExecutor)
                                 .exceptionally(e -> {
                                       log.error("이체 결과 조회 실패 itemId={}", context.itemId(), e);
-                                      // TODO: 네트워크 예외 시 이중 송금 방지를 위해 전문번호 사전 생성 후 PendingInquiry 처리 필요
-                                      return new TransferItemResult.Fail(context.itemId());
+                                      return new TransferItemResult.Unknown(context.itemId());
                                 })
 
                 ).toList();
@@ -93,7 +97,7 @@ public class BulkSettlementService {
                     .join();
         } catch (Exception e) {
             log.error("이체 타임아웃", e);
-            bulkSettlementProcessor.failedSettlement(portOnePaymentId);
+            bulkSettlementProcessor.failSettlement(portOnePaymentId);
             return;
         }
 
@@ -103,17 +107,19 @@ public class BulkSettlementService {
         results.forEach(result -> {
             switch (result) {
                 case TransferItemResult.Success s ->
-                    bulkSettlementProcessor.assignTransferId(s.itemId(), s.transferId());
+                    bulkSettlementProcessor.completeItem(s.itemId());
                 case TransferItemResult.PendingInquiry p ->
-                    bulkSettlementProcessor.markPendingInquiry(p.itemId(), p.messageNo());
+                    bulkSettlementProcessor.markPendingInquiry(p.itemId());
                 case TransferItemResult.Fail f ->
-                    bulkSettlementProcessor.markFailed(f.itemId());
+                    bulkSettlementProcessor.failItem(f.itemId());
+                case TransferItemResult.Unknown u ->
+                    bulkSettlementProcessor.unknownItem(u.itemId());
             }
         });
         boolean anyNotCompleted = results.stream()
                 .anyMatch(r -> !(r instanceof TransferItemResult.Success));
         if (anyNotCompleted) {
-            bulkSettlementProcessor.failedSettlement(portOnePaymentId);
+            bulkSettlementProcessor.failSettlement(portOnePaymentId);
             return;
         }
         bulkSettlementProcessor.completeSettlement(portOnePaymentId);
@@ -124,16 +130,20 @@ public class BulkSettlementService {
         BulkSettlementContext inquiryContexts = bulkSettlementProcessor.loadPendingInquiryContexts(portOnePaymentId);
         List<CompletableFuture<TransferItemResult>> inquiryFutures = inquiryContexts.bulkSettlementItemContexts().stream()
                 .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() -> {
-                    WageTransferResult result = wageTransferPort.inquireTransfer(context.pendingMessageNo());
+                    WageTransferResult result = wageTransferPort.inquireTransfer(context.messageNo());
                     if (result.transferId() != null) {
                         return new TransferItemResult.Success(context.itemId(), result.transferId());
+                    } else if (result.pendingMessageNo() != null) {
+                        return new TransferItemResult.PendingInquiry(context.itemId(), result.pendingMessageNo());
+                    }else if(result.failureReason() != null) {
+                        return new TransferItemResult.Fail(context.itemId(), result.failureReason());
+                        //todo : 확정 실패시 알림 발송 필요
                     }
-                    return new TransferItemResult.PendingInquiry(context.itemId(), result.pendingMessageNo());
+                    return new TransferItemResult.Unknown(context.itemId());
                 }, settlementExecutor
                 ).exceptionally(e -> {
                     log.error("이체 결과 조회 실패 itemId={}", context.itemId(), e);
-                    // TODO: 네트워크 예외 시 이중 송금 방지를 위해 전문번호 사전 생성 후 PendingInquiry 처리 필요
-                    return new TransferItemResult.Fail(context.itemId());
+                    return new TransferItemResult.Unknown(context.itemId());
                 })).toList();
         try {
             CompletableFuture.allOf(inquiryFutures.toArray(new CompletableFuture[0]))
@@ -141,7 +151,7 @@ public class BulkSettlementService {
                     .join();
         } catch (Exception e) {
             log.error("이체 타임아웃", e);
-            bulkSettlementProcessor.failedSettlement(portOnePaymentId);
+            bulkSettlementProcessor.failSettlement(portOnePaymentId);
             return;
         }
         List<TransferItemResult> results = inquiryFutures.stream()
@@ -150,11 +160,13 @@ public class BulkSettlementService {
         results.forEach(result -> {
             switch (result) {
                 case TransferItemResult.Success s ->
-                    bulkSettlementProcessor.assignTransferId(s.itemId(), s.transferId());
+                    bulkSettlementProcessor.completeItem(s.itemId());
                 case TransferItemResult.PendingInquiry p ->
-                    bulkSettlementProcessor.markPendingInquiry(p.itemId(), p.messageNo());
+                    bulkSettlementProcessor.markPendingInquiry(p.itemId());
                 case TransferItemResult.Fail f ->
-                    bulkSettlementProcessor.markFailed(f.itemId());
+                    bulkSettlementProcessor.failItem(f.itemId());
+                case TransferItemResult.Unknown u ->
+                    bulkSettlementProcessor.unknownItem(u.itemId());
             }
         });
         // PENDING/FAILED 아이템 재이체
@@ -162,7 +174,7 @@ public class BulkSettlementService {
     }
 
      public void failedPayment(String portOnePaymentId){
-        bulkSettlementProcessor.failedPayment(portOnePaymentId);
+        bulkSettlementProcessor.failPayment(portOnePaymentId);
      }
      public void receiveInterBankFailure(String transferId){
         bulkSettlementProcessor.receiveInterBankFailure(transferId);

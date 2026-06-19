@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Repository
 public interface EwaTransferRepository extends JpaRepository<EwaTransfer, Long> {
-    Optional<EwaTransfer> findByTransferId(String transferId);
+    Optional<EwaTransfer> findByMessageNo(String messageNo);
 
     @Query("SELECT e FROM EwaTransfer e " +
             "JOIN FETCH e.ewaRequest er " +

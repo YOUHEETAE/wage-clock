@@ -3,6 +3,7 @@ package com.wageclock.wageclock.domain.outbox;
 import com.wageclock.wageclock.domain.EwaTransfer.EwaTransfer;
 import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferProcessor;
 import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferRepository;
+import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
 import com.wageclock.wageclock.domain.worker.Worker;
@@ -33,7 +34,7 @@ class EwaTransferFailureOutBoxServiceTest {
     EwaTransferFailureOutBoxEvent buildEvent() {
         return EwaTransferFailureOutBoxEvent.builder()
                 .ewaTransferId(1L)
-                .transferId("TX-001")
+                .messageNo("TX-001")
                 .amount(BigDecimal.valueOf(50000))
                 .build();
     }
@@ -51,14 +52,16 @@ class EwaTransferFailureOutBoxServiceTest {
         EwaTransferFailureOutBoxEvent event = buildEvent();
         EwaTransfer transfer = buildMockTransfer();
         when(ewaTransferRepository.findByIdWithWorker(1L)).thenReturn(Optional.of(transfer));
-        when(wageTransferPort.transfer(any(), any(), eq("EWA-1")))
-                .thenReturn(new WageTransferResult("TX-002", null, null, null));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-002");
+        when(wageTransferPort.transfer(any(), any(), eq("MSG-002")))
+                .thenReturn(new WageTransferResult("MSG-002", null, null));
 
         ewaTransferFailureOutBoxService.processEvent(event);
 
-        verify(ewaTransferFailureOutBoxResultHandler).saveSuccess(transfer, "TX-002", event);
-        verify(ewaTransferProcessor, never()).markFailed(any());
-        verify(ewaTransferProcessor, never()).markUnknown(any());
+        verify(ewaTransferProcessor).assignMessageNo(1L, "MSG-002");
+        verify(ewaTransferFailureOutBoxResultHandler).saveSuccess(transfer, event);
+        verify(ewaTransferProcessor, never()).failRetry(any());
+        verify(ewaTransferProcessor, never()).unKnownRetry(any());
     }
 
     @Test
@@ -66,36 +69,41 @@ class EwaTransferFailureOutBoxServiceTest {
         EwaTransferFailureOutBoxEvent event = buildEvent();
         EwaTransfer transfer = buildMockTransfer();
         when(ewaTransferRepository.findByIdWithWorker(1L)).thenReturn(Optional.of(transfer));
-        when(wageTransferPort.transfer(any(), any(), eq("EWA-1")))
-                .thenReturn(new WageTransferResult(null, "MSG-002", null, null));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-002");
+        when(wageTransferPort.transfer(any(), any(), eq("MSG-002")))
+                .thenReturn(new WageTransferResult(null, "MSG-002", null));
 
         ewaTransferFailureOutBoxService.processEvent(event);
 
-        verify(ewaTransferProcessor).markPendingInquiry("MSG-002", 1L);
+        verify(ewaTransferProcessor).markPendingInquiry(1L);
         // VTIM 시 이중 송금 방지: 이벤트를 PROCESSED로 종료
         assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PROCESSED, event.getStatus());
         verify(ewaTransferFailureOutBoxRepository).save(event);
     }
 
     @Test
-    void processEvent_재이체_확정실패_markRetryFailed_호출() {
+    void processEvent_재이체_확정실패_retryFailed_호출() {
         EwaTransferFailureOutBoxEvent event = buildEvent();
         EwaTransfer transfer = buildMockTransfer();
         when(ewaTransferRepository.findByIdWithWorker(1L)).thenReturn(Optional.of(transfer));
-        when(wageTransferPort.transfer(any(), any(), eq("EWA-1")))
-                .thenReturn(new WageTransferResult(null, null, null, "계좌 없음"));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-002");
+        when(wageTransferPort.transfer(any(), any(), eq("MSG-002")))
+                .thenReturn(new WageTransferResult(null, null, "계좌 없음"));
 
         ewaTransferFailureOutBoxService.processEvent(event);
 
-        verify(ewaTransferProcessor).markRetryFailed(1L);
-        verify(ewaTransferFailureOutBoxResultHandler, never()).saveSuccess(any(), any(), any());
+        verify(ewaTransferProcessor).failRetry(1L);
+        assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.FAILED, event.getStatus());
+        verify(ewaTransferFailureOutBoxRepository).save(event);
+        verify(ewaTransferFailureOutBoxResultHandler, never()).saveSuccess(any(), any());
     }
 
     @Test
-    void processEvent_예외발생_retryCount_증가_markRetryUnknown_저장() {
+    void processEvent_예외발생_retryCount_증가_unKnownRetry_저장() {
         EwaTransferFailureOutBoxEvent event = buildEvent();
         EwaTransfer transfer = buildMockTransfer();
         when(ewaTransferRepository.findByIdWithWorker(1L)).thenReturn(Optional.of(transfer));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-002");
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenThrow(new RuntimeException("네트워크 오류"));
 
@@ -103,8 +111,8 @@ class EwaTransferFailureOutBoxServiceTest {
 
         assertEquals(1, event.getRetryCount());
         verify(ewaTransferFailureOutBoxRepository).save(event);
-        verify(ewaTransferProcessor).markRetryUnknown(1L);
-        verify(ewaTransferFailureOutBoxResultHandler, never()).saveSuccess(any(), any(), any());
+        verify(ewaTransferProcessor).unKnownRetry(1L);
+        verify(ewaTransferFailureOutBoxResultHandler, never()).saveSuccess(any(), any());
     }
 
     @Test
@@ -116,6 +124,7 @@ class EwaTransferFailureOutBoxServiceTest {
         }
         EwaTransfer transfer = buildMockTransfer();
         when(ewaTransferRepository.findByIdWithWorker(1L)).thenReturn(Optional.of(transfer));
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenReturn("MSG-002");
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenThrow(new RuntimeException("네트워크 오류"));
 

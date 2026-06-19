@@ -27,9 +27,7 @@ public class EwaTransfer extends BaseEntity {
     @Column(nullable = false)
     private BigDecimal amount;
 
-    private String transferId;
-
-    private String pendingMessageNo;
+    private String messageNo;
 
     @Enumerated(EnumType.STRING)
     private EwaTransferStatus status;
@@ -50,24 +48,25 @@ public class EwaTransfer extends BaseEntity {
         this.status = EwaTransferStatus.PENDING;
     }
 
-    public void assignTransferId(String transferId) {
-        this.transferId = transferId;
+    public void completed() {
         this.status = EwaTransferStatus.COMPLETED;
     }
-    public void markPendingInquiry(String pendingMessageNo) {
-        this.pendingMessageNo = pendingMessageNo;
+    public void markPendingInquiry() {
         this.status = EwaTransferStatus.PENDING_INQUIRY;
     }
-    public void markFailed(){
+    public void assignMessageNo(String messageNo) {
+        this.messageNo = messageNo;
+    }
+    public void failed(){
         this.status = EwaTransferStatus.FAILED;
     }
     public Worker getWorker(){
         return this.ewaRequest.getWorker();
     }
-    public void markUnknown(){
+    public void unknown(){
         this.status = EwaTransferStatus.UNKNOWN;
     }
-    public void markRetrying(){
+    public void retrying(){
         this.status = EwaTransferStatus.RETRYING;
     }
     public Long getWorkerId(){

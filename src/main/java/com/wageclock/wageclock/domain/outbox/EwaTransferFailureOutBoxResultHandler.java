@@ -17,9 +17,9 @@ public class EwaTransferFailureOutBoxResultHandler {
         this.ewaTransferFailureOutBoxRepository = ewaTransferFailureOutBoxRepository;
     }
 
-    public void saveSuccess(EwaTransfer ewaTransfer, String transferId, EwaTransferFailureOutBoxEvent event) {
+    public void saveSuccess(EwaTransfer ewaTransfer, EwaTransferFailureOutBoxEvent event) {
         Long ewaTransferId = ewaTransfer.getId();
-        ewaTransferProcessor.completeRetry(transferId, ewaTransferId);
+        ewaTransferProcessor.completeRetry(ewaTransferId);
         event.processed();
         ewaTransferFailureOutBoxRepository.save(event);
     }
