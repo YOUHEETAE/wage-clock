@@ -25,7 +25,7 @@ public class EwaTransferFailureOutBoxEvent extends BaseEntity {
     private Long ewaTransferId;
 
     @Column(nullable = false)
-    private String transferId;
+    private String  messageNo;
 
     @Column(nullable = false)
     private BigDecimal amount;
@@ -43,9 +43,9 @@ public class EwaTransferFailureOutBoxEvent extends BaseEntity {
         FAILED
     }
     @Builder
-    public EwaTransferFailureOutBoxEvent(Long ewaTransferId, BigDecimal amount, String transferId) {
+    public EwaTransferFailureOutBoxEvent(Long ewaTransferId, BigDecimal amount, String messageNo) {
         this.ewaTransferId = ewaTransferId;
-        this.transferId = transferId;
+        this.messageNo = messageNo;
         this.amount = amount;
         this.status = EwaTransferFailureOutBoxStatus.PENDING;
     }
@@ -58,5 +58,8 @@ public class EwaTransferFailureOutBoxEvent extends BaseEntity {
         if (this.retryCount >= MAX_RETRY) {
             this.status = EwaTransferFailureOutBoxStatus.FAILED;
         }
+    }
+    public void failed(){
+        this.status = EwaTransferFailureOutBoxStatus.FAILED;
     }
 }

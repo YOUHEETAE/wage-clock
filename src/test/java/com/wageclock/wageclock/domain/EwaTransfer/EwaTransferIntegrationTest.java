@@ -164,8 +164,9 @@ public class EwaTransferIntegrationTest {
 
     @Test
     void initiateEwa_성공_EwaTransfer_COMPLETED_EwaRequest_APPROVED() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("TX-001");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("TX-001", null, null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
@@ -176,7 +177,7 @@ public class EwaTransferIntegrationTest {
 
         EwaTransfer transfer = ewaTransferRepository.findAll().get(0);
         assertEquals(EwaTransfer.EwaTransferStatus.COMPLETED, transfer.getStatus());
-        assertEquals("TX-001", transfer.getTransferId());
+        assertEquals("TX-001", transfer.getMessageNo());
         assertEquals(0, BigDecimal.valueOf(100).compareTo(transfer.getAmount()));
     }
 
@@ -184,8 +185,9 @@ public class EwaTransferIntegrationTest {
 
     @Test
     void initiateEwa_VTIM_EwaTransfer_PENDING_INQUIRY() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("MSG-001");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
+                .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
@@ -196,13 +198,14 @@ public class EwaTransferIntegrationTest {
 
         EwaTransfer transfer = ewaTransferRepository.findAll().get(0);
         assertEquals(EwaTransfer.EwaTransferStatus.PENDING_INQUIRY, transfer.getStatus());
-        assertEquals("MSG-001", transfer.getPendingMessageNo());
+        assertEquals("MSG-001", transfer.getMessageNo());
     }
 
     @Test
     void 스케줄러_VTIM_재조회_COMPLETED() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("MSG-001");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult(null, "MSG-001", null, null));
+                .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
@@ -212,7 +215,7 @@ public class EwaTransferIntegrationTest {
                 ewaTransferRepository.findAll().get(0).getStatus());
 
         when(wageTransferPort.inquireTransfer(any()))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("MSG-001", null, null));
         ewaTransferScheduler.retryPendingInquiryTransfer();
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
@@ -220,7 +223,6 @@ public class EwaTransferIntegrationTest {
 
         EwaTransfer transfer = ewaTransferRepository.findAll().get(0);
         assertEquals(EwaTransfer.EwaTransferStatus.COMPLETED, transfer.getStatus());
-        assertEquals("TX-001", transfer.getTransferId());
     }
 
     // ─── 예외 → UNKNOWN ──────────────────────────────────────────────────────────
@@ -254,7 +256,7 @@ public class EwaTransferIntegrationTest {
                 ewaTransferRepository.findAll().get(0).getStatus());
 
         when(wageTransferPort.inquireTransfer(any()))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("TX-001", null, null));
         ewaTransferScheduler.retryPendingInquiryTransfer();
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
@@ -267,15 +269,16 @@ public class EwaTransferIntegrationTest {
 
     @Test
     void 타행이체불능_수신_FAILED_OutBox_생성() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("1TX001", null, null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        Long ewaTransferId = initiateEwa(ewaId);
+        initiateEwa(ewaId);
 
         ResponseEntity<Void> response = testRestTemplate.postForEntity(
                 "/mock/firm-banking/3000",
-                new HttpEntity<>(new InterBankFailureNotification("TX-001", "EWA-" + ewaTransferId), new HttpHeaders()),
+                new HttpEntity<>(new InterBankFailureNotification("1TX001"), new HttpHeaders()),
                 Void.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -289,29 +292,31 @@ public class EwaTransferIntegrationTest {
         List<EwaTransferFailureOutBoxEvent> events = ewaTransferFailureOutBoxRepository.findAll();
         assertEquals(1, events.size());
         assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PENDING, events.get(0).getStatus());
-        assertEquals("TX-001", events.get(0).getTransferId());
+        assertEquals("1TX001", events.get(0).getMessageNo());
     }
 
     // ─── OutBox 재이체 ────────────────────────────────────────────────────────────
 
     @Test
     void OutBox_재이체_성공_COMPLETED() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("1TX001", null, null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        Long ewaTransferId = initiateEwa(ewaId);
+        initiateEwa(ewaId);
 
         testRestTemplate.postForEntity(
                 "/mock/firm-banking/3000",
-                new HttpEntity<>(new InterBankFailureNotification("TX-001", "EWA-" + ewaTransferId), new HttpHeaders()),
+                new HttpEntity<>(new InterBankFailureNotification("1TX001"), new HttpHeaders()),
                 Void.class);
 
         assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PENDING,
                 ewaTransferFailureOutBoxRepository.findAll().get(0).getStatus());
 
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX002");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-002", null, null, null));
+                .thenReturn(new WageTransferResult("1TX002", null, null));
         outBoxScheduler.processEwaTransferFailureOutBoxEvent();
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
@@ -319,7 +324,7 @@ public class EwaTransferIntegrationTest {
 
         EwaTransfer transfer = ewaTransferRepository.findAll().get(0);
         assertEquals(EwaTransfer.EwaTransferStatus.COMPLETED, transfer.getStatus());
-        assertEquals("TX-002", transfer.getTransferId());
+        assertEquals("1TX002", transfer.getMessageNo());
 
         EwaTransferFailureOutBoxEvent event = ewaTransferFailureOutBoxRepository.findAll().get(0);
         assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PROCESSED, event.getStatus());
@@ -327,19 +332,20 @@ public class EwaTransferIntegrationTest {
 
     @Test
     void OutBox_재이체_확정실패_FAILED_EwaRequest_APPROVED_유지() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("1TX001", null, null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        Long ewaTransferId = initiateEwa(ewaId);
+        initiateEwa(ewaId);
 
         testRestTemplate.postForEntity(
                 "/mock/firm-banking/3000",
-                new HttpEntity<>(new InterBankFailureNotification("TX-001", "EWA-" + ewaTransferId), new HttpHeaders()),
+                new HttpEntity<>(new InterBankFailureNotification("1TX001"), new HttpHeaders()),
                 Void.class);
 
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult(null, null, null, "계좌 없음"));
+                .thenReturn(new WageTransferResult(null, null, "계좌 없음"));
         outBoxScheduler.processEwaTransferFailureOutBoxEvent();
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
@@ -351,15 +357,16 @@ public class EwaTransferIntegrationTest {
 
     @Test
     void OutBox_재이체_실패_retryCount_증가() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
         when(wageTransferPort.transfer(any(), any(), any()))
-                .thenReturn(new WageTransferResult("TX-001", null, null, null));
+                .thenReturn(new WageTransferResult("1TX001", null, null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        Long ewaTransferId = initiateEwa(ewaId);
+        initiateEwa(ewaId);
 
         testRestTemplate.postForEntity(
                 "/mock/firm-banking/3000",
-                new HttpEntity<>(new InterBankFailureNotification("TX-001", "EWA-" + ewaTransferId), new HttpHeaders()),
+                new HttpEntity<>(new InterBankFailureNotification("1TX001"), new HttpHeaders()),
                 Void.class);
 
         when(wageTransferPort.transfer(any(), any(), any()))

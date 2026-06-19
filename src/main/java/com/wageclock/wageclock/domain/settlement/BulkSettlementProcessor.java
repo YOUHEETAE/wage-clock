@@ -92,28 +92,44 @@ public class BulkSettlementProcessor {
         bulkSettlementOutBoxEventRepository.save(bulkSettlementOutBoxEvent);
     }
     @Transactional
-    public void assignTransferId(Long itemId, String transferId) {
+    public void completeItem(Long itemId) {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
-        item.assignTransferId(transferId);
+        item.completed();
         item.getPayPeriod().close();
         bulkSettlementItemRepository.save(item);
     }
 
     @Transactional
-    public void markPendingInquiry(Long itemId, String pendingMessageNo) {
+    public void markPendingInquiry(Long itemId) {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
-        item.markPendingInquiry(pendingMessageNo);
+        item.markPendingInquiry();
         bulkSettlementItemRepository.save(item);
     }
 
     @Transactional
-    public void markFailed(Long itemId) {
+    public void failItem(Long itemId) {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
-        item.markFailed();
+        item.failed();
         bulkSettlementItemRepository.save(item);
+    }
+
+    @Transactional
+    public void unknownItem(Long itemId) {
+        BulkSettlementItem bulkSettlementItem = bulkSettlementItemRepository.findById(itemId)
+                .orElseThrow(() -> new NotFoundException("Item not found"));
+        bulkSettlementItem.unknown();
+        bulkSettlementItemRepository.save(bulkSettlementItem);
+    }
+
+    @Transactional
+    public void assignMessageNo(Long itemId, String messageNo) {
+        BulkSettlementItem bulkSettlementItem =  bulkSettlementItemRepository.findById(itemId)
+                .orElseThrow(() -> new NotFoundException("Item not found"));
+        bulkSettlementItem.assignMessageNo(messageNo);
+        bulkSettlementItemRepository.save(bulkSettlementItem);
     }
 
     @Transactional
@@ -129,7 +145,7 @@ public class BulkSettlementProcessor {
         }
         List<BulkSettlementItemContext> itemContexts = items.stream()
                 .map(item -> new BulkSettlementItemContext(item.getWorkerId(), item.getAmount(),
-                        item.getId(), item.getTransferId(), null))
+                        item.getId(), item.getMessageNo()))
                 .toList();
         return new BulkSettlementContext(items.getFirst().getBulkSettlement().getId(), itemContexts);
     }
@@ -138,7 +154,8 @@ public class BulkSettlementProcessor {
     public BulkSettlementContext loadPendingInquiryContexts(String portOnePaymentId) {
         List<BulkSettlementItem> items = bulkSettlementItemRepository
                 .findByBulkSettlement_PortOnePaymentIdAndStatusIn(portOnePaymentId,
-                        List.of(BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY));
+                        List.of(BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY,
+                                BulkSettlementItem.BulkSettlementItemStatus.UNKNOWN));
         if (items.isEmpty()) {
             BulkSettlement bulkSettlement = bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
                     .orElseThrow(() -> new NotFoundException("BulkSettlement not found"));
@@ -146,7 +163,7 @@ public class BulkSettlementProcessor {
         }
         List<BulkSettlementItemContext> itemContexts = items.stream()
                 .map(item -> new BulkSettlementItemContext(item.getWorkerId(), item.getAmount(),
-                        item.getId(), item.getTransferId(), item.getPendingMessageNo()))
+                        item.getId(), item.getMessageNo()))
                 .toList();
         return new BulkSettlementContext(items.getFirst().getBulkSettlement().getId(), itemContexts);
     }
@@ -162,31 +179,39 @@ public class BulkSettlementProcessor {
         bulkSettlementRepository.save(bulkSettlement);
     }
     @Transactional
-    public void failedSettlement(String portOnePaymentId){
+    public void failSettlement(String portOnePaymentId){
         BulkSettlement bulkSettlement = bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
                 .orElseThrow(() -> new NotFoundException("BulkSettlement not found"));
         bulkSettlement.transferFailed();
         bulkSettlementRepository.save(bulkSettlement);
     }
     @Transactional
-    public void failedPayment(String portOnePaymentId){
+    public void failPayment(String portOnePaymentId){
         BulkSettlement bulkSettlement = bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
                 .orElseThrow(() -> new NotFoundException(portOnePaymentId + " not found"));
         bulkSettlement.paymentFailed();
         bulkSettlementRepository.save(bulkSettlement);
     }
     @Transactional
-    public void receiveInterBankFailure(String transferId){
-        BulkSettlementItem item = bulkSettlementItemRepository.findByTransferId(transferId)
+    public void receiveInterBankFailure(String messageNo){
+        BulkSettlementItem item = bulkSettlementItemRepository.findByMessageNo(messageNo)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
-        item.markFailed();
+        item.retrying();
+        item.getBulkSettlement().retrying();
         bulkSettlementItemRepository.save(item);
         InterBankFailureOutBoxEvent event = InterBankFailureOutBoxEvent.builder()
-                .transferId(transferId)
+                .messageNo(messageNo)
+                .bulkSettlementItemId(item.getId())
                 .portOnePaymentId(item.getBulkSettlement().getPortOnePaymentId())
                 .bulkSettlementId(item.getBulkSettlement().getId())
                 .build();
         interBankFailureOutBoxEventRepository.save(event);
     }
-
+    @Transactional
+    public void completeRetry(Long itemId) {
+        BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
+                .orElseThrow(() -> new NotFoundException("Item not found"));
+        item.completed();
+        completeSettlement(item.getBulkSettlement().getPortOnePaymentId());
+    }
 }

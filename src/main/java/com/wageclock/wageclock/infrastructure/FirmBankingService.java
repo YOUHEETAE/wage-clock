@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.infrastructure;
 
+import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.global.exception.ExternalApiException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -25,8 +26,7 @@ public class FirmBankingService {
         this.redisTemplate = redisTemplate;
     }
 
-    public HectoFinancialTransferResponse transfer(Worker worker, BigDecimal amount, String referenceId) {
-        String messageNo = generateMessageNo();
+    public HectoFinancialTransferResponse transfer(Worker worker, BigDecimal amount, String messageNo) {
         LocalDateTime now = LocalDateTime.now();
 
         HectoFinancialTransferRequest request = new HectoFinancialTransferRequest(
@@ -71,10 +71,11 @@ public class FirmBankingService {
         return new HectoFinancialInquiryResponse("0000", "0000", "0000000000000", "0000000000000");
     }
 
-    private String generateMessageNo() {
-        String key = "hectofinancial:seq:" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+    public String generateMessageNo(TransferType type) {
+        String key = "hectofinancial:seq:" + type.name().toLowerCase() + ":"
+                + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         Long seq = redisTemplate.opsForValue().increment(key);
         redisTemplate.expire(key, 1, TimeUnit.DAYS);
-        return String.format("%06d", seq);
+        return type.getPrefix() + String.format("%05d", seq);
     }
 }

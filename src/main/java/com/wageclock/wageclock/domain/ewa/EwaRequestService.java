@@ -43,9 +43,8 @@ public class EwaRequestService {
 
     public InitiateEwaResponse initiateEwa(Long ewaRequestId, Long employerId){
         EwaRequest ewaRequest = ewaRequestProcessor.validateAndLockEwa(ewaRequestId, employerId);
-        ewaTransferService.processTransfer(ewaRequest);
-        return new InitiateEwaResponse(ewaRequestId, ewaRequest.getRequestedAmount(),
-                ewaRequest.getStatus());
+        EwaRequest.EwaRequestStatus status = ewaTransferService.processTransfer(ewaRequest);
+        return new InitiateEwaResponse(ewaRequestId, ewaRequest.getRequestedAmount(), status);
     }
 
     @Transactional

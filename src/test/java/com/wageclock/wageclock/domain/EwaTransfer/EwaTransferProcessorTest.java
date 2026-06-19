@@ -38,7 +38,17 @@ class EwaTransferProcessorTest {
     }
 
     @Test
-    void assignTransferId_COMPLETED_EwaRequest_승인_PayPeriod_금액추가() {
+    void assignMessageNo_필드저장() {
+        EwaTransfer ewaTransfer = mock(EwaTransfer.class);
+        when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
+
+        ewaTransferProcessor.assignMessageNo(1L, "MSG-001");
+
+        verify(ewaTransfer).assignMessageNo("MSG-001");
+    }
+
+    @Test
+    void completed_COMPLETED_EwaRequest_승인_PayPeriod_금액추가() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         PayPeriod payPeriod = mock(PayPeriod.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
@@ -47,9 +57,9 @@ class EwaTransferProcessorTest {
         when(ewaRequest.getPayPeriod()).thenReturn(payPeriod);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
-        ewaTransferProcessor.assignTransferId("TX-001", 1L);
+        ewaTransferProcessor.completeTransfer(1L);
 
-        verify(ewaTransfer).assignTransferId("TX-001");
+        verify(ewaTransfer).completed();
         verify(ewaRequest).approved();
         verify(payPeriod).addEwaAmount(BigDecimal.valueOf(50000));
     }
@@ -59,34 +69,34 @@ class EwaTransferProcessorTest {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
-        ewaTransferProcessor.markPendingInquiry("MSG-001", 1L);
+        ewaTransferProcessor.markPendingInquiry(1L);
 
-        verify(ewaTransfer).markPendingInquiry("MSG-001");
+        verify(ewaTransfer).markPendingInquiry();
     }
 
     @Test
-    void markFailed_FAILED_EwaRequest_failed_호출() {
+    void failed_FAILED_EwaRequest_failed_호출() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
-        ewaTransferProcessor.markFailed(1L);
+        ewaTransferProcessor.failTransfer(1L);
 
-        verify(ewaTransfer).markFailed();
+        verify(ewaTransfer).failed();
         verify(ewaRequest).failed();
     }
 
     @Test
-    void markUnknown_UNKNOWN_EwaRequest_unknown_호출() {
+    void unknown_UNKNOWN_EwaRequest_unknown_호출() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
-        ewaTransferProcessor.markUnknown(1L);
+        ewaTransferProcessor.unknownTransfer(1L);
 
-        verify(ewaTransfer).markUnknown();
+        verify(ewaTransfer).unknown();
         verify(ewaRequest).unknown();
     }
 
@@ -97,15 +107,15 @@ class EwaTransferProcessorTest {
         when(ewaTransfer.getId()).thenReturn(1L);
         when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
-        when(ewaTransferRepository.findByTransferId("TX-001")).thenReturn(Optional.of(ewaTransfer));
+        when(ewaTransferRepository.findByMessageNo("TX-001")).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.receiveInterBankFailure("TX-001");
 
-        verify(ewaTransfer).markRetrying();
+        verify(ewaTransfer).retrying();
         verify(ewaRequest).refundEwa(BigDecimal.valueOf(50000));
         ArgumentCaptor<EwaTransferFailureOutBoxEvent> captor = ArgumentCaptor.captor();
         verify(ewaTransferFailureOutBoxRepository).save(captor.capture());
-        assertEquals("TX-001", captor.getValue().getTransferId());
+        assertEquals("TX-001", captor.getValue().getMessageNo());
         assertEquals(1L, captor.getValue().getEwaTransferId());
         assertEquals(BigDecimal.valueOf(50000), captor.getValue().getAmount());
     }
@@ -120,32 +130,32 @@ class EwaTransferProcessorTest {
         when(ewaRequest.getPayPeriod()).thenReturn(payPeriod);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
-        ewaTransferProcessor.completeRetry("TX-002", 1L);
+        ewaTransferProcessor.completeRetry(1L);
 
-        verify(ewaTransfer).assignTransferId("TX-002");
+        verify(ewaTransfer).completed();
         verify(payPeriod).addEwaAmount(BigDecimal.valueOf(50000));
         verify(ewaRequest, never()).approved();
     }
 
     @Test
-    void markRetryFailed_EwaTransfer_FAILED_EwaRequest_미변경() {
+    void retryFailed_EwaTransfer_FAILED_EwaRequest_미변경() {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
-        ewaTransferProcessor.markRetryFailed(1L);
+        ewaTransferProcessor.failRetry(1L);
 
-        verify(ewaTransfer).markFailed();
+        verify(ewaTransfer).failed();
         verify(ewaTransfer, never()).getEwaRequest();
     }
 
     @Test
-    void markRetryUnknown_EwaTransfer_UNKNOWN_EwaRequest_미변경() {
+    void retryUnknown_EwaTransfer_UNKNOWN_EwaRequest_미변경() {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
-        ewaTransferProcessor.markRetryUnknown(1L);
+        ewaTransferProcessor.unKnownRetry(1L);
 
-        verify(ewaTransfer).markUnknown();
+        verify(ewaTransfer).unknown();
         verify(ewaTransfer, never()).getEwaRequest();
     }
 }

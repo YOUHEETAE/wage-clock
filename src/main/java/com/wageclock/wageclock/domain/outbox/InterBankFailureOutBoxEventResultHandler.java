@@ -1,8 +1,7 @@
 package com.wageclock.wageclock.domain.outbox;
 
 import com.wageclock.wageclock.domain.settlement.BulkSettlementItem;
-import com.wageclock.wageclock.domain.settlement.BulkSettlementItemRepository;
-import com.wageclock.wageclock.global.exception.NotFoundException;
+import com.wageclock.wageclock.domain.settlement.BulkSettlementProcessor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,19 +9,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class InterBankFailureOutBoxEventResultHandler {
 
     private final InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
-    private final BulkSettlementItemRepository bulkSettlementItemRepository;
+    private final BulkSettlementProcessor bulkSettlementProcessor;
 
     public InterBankFailureOutBoxEventResultHandler(InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository,
-                                                    BulkSettlementItemRepository bulkSettlementItemRepository) {
+                                                    BulkSettlementProcessor bulkSettlementProcessor) {
         this.interBankFailureOutBoxEventRepository = interBankFailureOutBoxEventRepository;
-        this.bulkSettlementItemRepository = bulkSettlementItemRepository;
+        this.bulkSettlementProcessor = bulkSettlementProcessor;
     }
     @Transactional
-    public void saveSuccess(String oldTransferId,String newTransferId, InterBankFailureOutBoxEvent event){
-        BulkSettlementItem bulkSettlementItem = bulkSettlementItemRepository.findByTransferId(oldTransferId)
-                .orElseThrow(() -> new NotFoundException("BulkSettlementItem Not Found"));
-        bulkSettlementItem.assignTransferId(newTransferId);
-        bulkSettlementItemRepository.save(bulkSettlementItem);
+    public void saveSuccess(BulkSettlementItem failedItem, InterBankFailureOutBoxEvent event){
+        Long itemId = failedItem.getId();
+        bulkSettlementProcessor.completeRetry(itemId);
         event.processed();
         interBankFailureOutBoxEventRepository.save(event);
     }

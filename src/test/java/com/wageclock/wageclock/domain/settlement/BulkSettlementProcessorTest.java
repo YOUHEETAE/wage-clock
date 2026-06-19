@@ -80,7 +80,7 @@ class BulkSettlementProcessorTest {
     }
 
     @Test
-    void assignTransferId_정상_COMPLETED_PayPeriod_close() {
+    void completeItem_정상_COMPLETED_PayPeriod_close() {
         PayPeriod payPeriod = mock(PayPeriod.class);
         BulkSettlementItem item = BulkSettlementItem.builder()
                 .bulkSettlement(mock(BulkSettlement.class))
@@ -89,11 +89,24 @@ class BulkSettlementProcessorTest {
                 .build();
         when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
 
-        bulkSettlementProcessor.assignTransferId(1L, "TX-001");
+        bulkSettlementProcessor.completeItem(1L);
 
         assertEquals(BulkSettlementItem.BulkSettlementItemStatus.COMPLETED, item.getStatus());
-        assertEquals("TX-001", item.getTransferId());
         verify(payPeriod).close();
+    }
+
+    @Test
+    void assignMessageNo_필드저장() {
+        BulkSettlementItem item = BulkSettlementItem.builder()
+                .bulkSettlement(mock(BulkSettlement.class))
+                .payPeriod(mock(PayPeriod.class))
+                .amount(BigDecimal.valueOf(50000))
+                .build();
+        when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        bulkSettlementProcessor.assignMessageNo(1L, "MSG-001");
+
+        assertEquals("MSG-001", item.getMessageNo());
     }
 
     @Test
@@ -105,14 +118,13 @@ class BulkSettlementProcessorTest {
                 .build();
         when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
 
-        bulkSettlementProcessor.markPendingInquiry(1L, "MSG-001");
+        bulkSettlementProcessor.markPendingInquiry(1L);
 
         assertEquals(BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY, item.getStatus());
-        assertEquals("MSG-001", item.getPendingMessageNo());
     }
 
     @Test
-    void markFailed_정상_FAILED() {
+    void failItem_정상_FAILED() {
         BulkSettlementItem item = BulkSettlementItem.builder()
                 .bulkSettlement(mock(BulkSettlement.class))
                 .payPeriod(mock(PayPeriod.class))
@@ -120,9 +132,23 @@ class BulkSettlementProcessorTest {
                 .build();
         when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
 
-        bulkSettlementProcessor.markFailed(1L);
+        bulkSettlementProcessor.failItem(1L);
 
         assertEquals(BulkSettlementItem.BulkSettlementItemStatus.FAILED, item.getStatus());
+    }
+
+    @Test
+    void unknownItem_정상_UNKNOWN() {
+        BulkSettlementItem item = BulkSettlementItem.builder()
+                .bulkSettlement(mock(BulkSettlement.class))
+                .payPeriod(mock(PayPeriod.class))
+                .amount(BigDecimal.valueOf(50000))
+                .build();
+        when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        bulkSettlementProcessor.unknownItem(1L);
+
+        assertEquals(BulkSettlementItem.BulkSettlementItemStatus.UNKNOWN, item.getStatus());
     }
 
     @Test
@@ -133,8 +159,8 @@ class BulkSettlementProcessorTest {
                 .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(50000)).build();
         BulkSettlementItem item2 = BulkSettlementItem.builder()
                 .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(30000)).build();
-        item1.assignTransferId("TX-001");
-        item2.assignTransferId("TX-002");
+        item1.completed();
+        item2.completed();
         bulkSettlement.addItem(item1);
         bulkSettlement.addItem(item2);
         when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
@@ -152,8 +178,8 @@ class BulkSettlementProcessorTest {
                 .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(50000)).build();
         BulkSettlementItem item2 = BulkSettlementItem.builder()
                 .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(30000)).build();
-        item1.assignTransferId("TX-001");
-        item2.markFailed();
+        item1.completed();
+        item2.failed();
         bulkSettlement.addItem(item1);
         bulkSettlement.addItem(item2);
         when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
@@ -165,21 +191,38 @@ class BulkSettlementProcessorTest {
     }
 
     @Test
-    void receiveInterBankFailure_정상_FAILED_아웃박스생성() {
+    void receiveInterBankFailure_정상_RETRYING_세틀먼트도_RETRYING_아웃박스생성() {
         BulkSettlement bulkSettlement = mock(BulkSettlement.class);
         when(bulkSettlement.getPortOnePaymentId()).thenReturn("BULK-test");
         when(bulkSettlement.getId()).thenReturn(1L);
         BulkSettlementItem item = BulkSettlementItem.builder()
                 .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(50000)).build();
-        item.assignTransferId("TX-001");
-        when(bulkSettlementItemRepository.findByTransferId("TX-001")).thenReturn(Optional.of(item));
+        item.assignMessageNo("TX-001");
+        when(bulkSettlementItemRepository.findByMessageNo("TX-001")).thenReturn(Optional.of(item));
 
         bulkSettlementProcessor.receiveInterBankFailure("TX-001");
 
-        assertEquals(BulkSettlementItem.BulkSettlementItemStatus.FAILED, item.getStatus());
+        assertEquals(BulkSettlementItem.BulkSettlementItemStatus.RETRYING, item.getStatus());
+        verify(bulkSettlement).retrying();
         ArgumentCaptor<InterBankFailureOutBoxEvent> captor = ArgumentCaptor.captor();
         verify(interBankFailureOutBoxEventRepository).save(captor.capture());
-        assertEquals("TX-001", captor.getValue().getTransferId());
+        assertEquals("TX-001", captor.getValue().getMessageNo());
         assertEquals("BULK-test", captor.getValue().getPortOnePaymentId());
+    }
+
+    @Test
+    void completeRetry_아이템_COMPLETED_세틀먼트도_재확인() {
+        BulkSettlement bulkSettlement = BulkSettlement.builder()
+                .employerId(1L).portOnePaymentId("BULK-test").totalAmount(BigDecimal.valueOf(50000)).build();
+        BulkSettlementItem item = BulkSettlementItem.builder()
+                .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(50000)).build();
+        bulkSettlement.addItem(item);
+        when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
+
+        bulkSettlementProcessor.completeRetry(1L);
+
+        assertEquals(BulkSettlementItem.BulkSettlementItemStatus.COMPLETED, item.getStatus());
+        assertEquals(BulkSettlement.BulkSettlementStatus.COMPLETED, bulkSettlement.getStatus());
     }
 }

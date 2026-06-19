@@ -49,7 +49,8 @@ public class BulkSettlement extends BaseEntity {
         PROCESSING,
         COMPLETED,
         TRANSFER_FAILED,
-        PAYMENT_FAILED
+        PAYMENT_FAILED,
+        RETRYING
     }
 
     @Builder
@@ -83,5 +84,7 @@ public class BulkSettlement extends BaseEntity {
     public void paymentFailed(){
         this.status = BulkSettlementStatus.PAYMENT_FAILED;
     }
-
+    public void retrying(){
+        this.status = BulkSettlementStatus.RETRYING;
+    }
 }

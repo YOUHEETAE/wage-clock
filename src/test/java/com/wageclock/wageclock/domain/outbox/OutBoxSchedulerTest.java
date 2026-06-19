@@ -49,7 +49,8 @@ public class OutBoxSchedulerTest {
     @Test
     void processInterBankFailureOutBoxEvent_검증() {
         InterBankFailureOutBoxEvent event = InterBankFailureOutBoxEvent.builder()
-                .transferId("TX-001")
+                .messageNo("TX-001")
+                .bulkSettlementItemId(10L)
                 .portOnePaymentId("BULK-001")
                 .bulkSettlementId(1L)
                 .build();
@@ -63,7 +64,7 @@ public class OutBoxSchedulerTest {
     void processEwaTransferFailureOutBoxEvent_검증(){
         EwaTransferFailureOutBoxEvent event = EwaTransferFailureOutBoxEvent.builder()
                 .ewaTransferId(1L)
-                .transferId("TX-001")
+                .messageNo("TX-001")
                 .amount(BigDecimal.valueOf(100000))
                 .build();
         when(ewaTransferFailureOutBoxRepository.findByStatus(any())).thenReturn(List.of(event));

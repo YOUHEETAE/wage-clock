@@ -21,7 +21,10 @@ public class InterBankFailureOutBoxEvent extends BaseEntity {
     private Long id;
 
     @Column(nullable = false, unique = true)
-    private String transferId;
+    private String messageNo;
+
+    @Column(nullable = false)
+    private Long bulkSettlementItemId;
 
     @Column(nullable = false)
     private String portOnePaymentId;
@@ -44,9 +47,10 @@ public class InterBankFailureOutBoxEvent extends BaseEntity {
     }
 
     @Builder
-    public InterBankFailureOutBoxEvent(String transferId, String portOnePaymentId,
+    public InterBankFailureOutBoxEvent(String messageNo, Long bulkSettlementItemId,String portOnePaymentId,
                                        Long bulkSettlementId) {
-        this.transferId = transferId;
+        this.messageNo = messageNo;
+        this.bulkSettlementItemId = bulkSettlementItemId;
         this.portOnePaymentId = portOnePaymentId;
         this.bulkSettlementId = bulkSettlementId;
         this.status = InterBankFailureOutBoxEventStatus.PENDING;
@@ -61,5 +65,9 @@ public class InterBankFailureOutBoxEvent extends BaseEntity {
     }
     public void processed() {
         this.status = InterBankFailureOutBoxEventStatus.PROCESSED;
+    }
+
+    public void failed(){
+        this.status = InterBankFailureOutBoxEventStatus.FAILED;
     }
 }

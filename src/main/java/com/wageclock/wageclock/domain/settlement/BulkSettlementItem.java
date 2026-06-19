@@ -30,9 +30,7 @@ public class BulkSettlementItem {
     @Column(nullable = false)
     private BigDecimal amount;
 
-    private String transferId;
-
-    private String pendingMessageNo;
+    private String messageNo;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -42,7 +40,9 @@ public class BulkSettlementItem {
         PENDING,
         PENDING_INQUIRY,
         COMPLETED,
-        FAILED
+        FAILED,
+        RETRYING,
+        UNKNOWN
     }
 
     @Builder
@@ -53,18 +53,28 @@ public class BulkSettlementItem {
         this.status = BulkSettlementItemStatus.PENDING;
     }
 
-    public void assignTransferId(String transferId) {
-        this.transferId = transferId;
+    public void completed() {
         this.status = BulkSettlementItemStatus.COMPLETED;
     }
 
-    public void markPendingInquiry(String messageNo) {
-        this.pendingMessageNo = messageNo;
+    public void markPendingInquiry() {
         this.status = BulkSettlementItemStatus.PENDING_INQUIRY;
     }
 
-    public void markFailed() {
+    public void failed() {
         this.status = BulkSettlementItemStatus.FAILED;
+    }
+
+    public void unknown() {
+        this.status = BulkSettlementItemStatus.UNKNOWN;
+    }
+
+    public void assignMessageNo(String messageNo) {
+        this.messageNo = messageNo;
+    }
+
+    public void retrying() {
+        this.status = BulkSettlementItemStatus.RETRYING;
     }
 
     public Long getWorkerId(){
