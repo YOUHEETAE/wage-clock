@@ -15,7 +15,7 @@ public class DashboardRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<DashboardResponse> getDashboard(Long employerId){
+    public List<DashboardResponse> getDashboards(Long employerId){
         String sql = """
                 SELECT DISTINCT ON (e.id)
                 w.id AS worker_id, w.name AS worker_name, e.id AS employment_id,

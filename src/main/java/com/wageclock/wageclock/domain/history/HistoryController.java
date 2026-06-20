@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/history")
+@RequestMapping("/api/histories")
 public class HistoryController {
 
     private final HistoryService historyService;
@@ -15,7 +15,7 @@ public class HistoryController {
     public HistoryController(HistoryService historyService) {
         this.historyService = historyService;
     }
-    @GetMapping("{employmentId}")
+    @GetMapping("/{employmentId}")
     public HistoryResponse getHistories(@PathVariable Long employmentId,
                                         @AuthenticationPrincipal Long callerId){
         return historyService.getHistories(employmentId, callerId);

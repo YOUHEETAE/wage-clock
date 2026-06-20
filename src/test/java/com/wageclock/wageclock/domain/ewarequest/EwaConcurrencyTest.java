@@ -1,12 +1,12 @@
-package com.wageclock.wageclock.domain.ewa;
+package com.wageclock.wageclock.domain.ewarequest;
 
 import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
+import com.wageclock.wageclock.domain.employment.EmploymentRequest;
+import com.wageclock.wageclock.domain.employment.EmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
@@ -97,9 +97,9 @@ public class EwaConcurrencyTest {
     void setUp() throws InterruptedException {
         String base = "http://localhost:" + port;
 
-        restTemplate.postForEntity(base + "/api/auth/signup",
+        restTemplate.postForEntity(base + "/api/auth/sign-up",
                 new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        restTemplate.postForEntity(base + "/api/auth/signup",
+        restTemplate.postForEntity(base + "/api/auth/sign-up",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
 
         ResponseEntity<LoginResponse> employerResponse = restTemplate.postForEntity(base + "/api/auth/login",
@@ -115,17 +115,17 @@ public class EwaConcurrencyTest {
         // 시급 3,600,000 → 1초당 1,000원 적립
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<CreateEmploymentRequest> employmentRequest = new HttpEntity<>(
-                new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders);
-        ResponseEntity<CreateEmploymentResponse> employmentResponse = restTemplate.postForEntity(
-                base + "/api/employment", employmentRequest, CreateEmploymentResponse.class);
+        HttpEntity<EmploymentRequest> employmentRequest = new HttpEntity<>(
+                new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders);
+        ResponseEntity<EmploymentResponse> employmentResponse = restTemplate.postForEntity(
+                base + "/api/employments", employmentRequest, EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
 
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
         HttpEntity<ClockInRequest> clockInRequest = new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders);
         HttpEntity<ClockInResponse> response = restTemplate.
-                postForEntity(base + "/api/worksession/clockIn", clockInRequest, ClockInResponse.class);
+                postForEntity(base + "/api/work-sessions/clock-in", clockInRequest, ClockInResponse.class);
 
         Long sessionId = response.getBody().sessionId();
 
@@ -154,7 +154,7 @@ public class EwaConcurrencyTest {
                     EwaRequestDto requestDto = new EwaRequestDto(employmentId, BigDecimal.valueOf(300), UUID.randomUUID().toString());
                     HttpEntity<EwaRequestDto> request = new HttpEntity<>(requestDto, headers);
                     ResponseEntity<EwaResponseDto> response = restTemplate.postForEntity(
-                            base + "/api/ewaRequest/request", request, EwaResponseDto.class);
+                            base + "/api/ewa-requests/request", request, EwaResponseDto.class);
                     if (response.getStatusCode() == HttpStatus.OK) {
                         successCount.incrementAndGet();
                     }

@@ -4,7 +4,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/payperiod")
+@RequestMapping("/api/pay-periods")
 public class PayPeriodController {
 
     private final PayPeriodService payPeriodService;

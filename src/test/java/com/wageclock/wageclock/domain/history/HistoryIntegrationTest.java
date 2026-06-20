@@ -5,8 +5,8 @@ import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
+import com.wageclock.wageclock.domain.employment.EmploymentRequest;
+import com.wageclock.wageclock.domain.employment.EmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
@@ -80,11 +80,11 @@ public class HistoryIntegrationTest {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("유사원", "worker2@test.com", "password", UserRole.WORKER), Void.class);
 
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
@@ -100,21 +100,21 @@ public class HistoryIntegrationTest {
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
-        ResponseEntity<CreateEmploymentResponse> empResponse = testRestTemplate.postForEntity(
-                "/api/employment",
-                new HttpEntity<>(new CreateEmploymentRequest(workerId, BigDecimal.valueOf(10000)), employerHeaders),
-                CreateEmploymentResponse.class);
+        ResponseEntity<EmploymentResponse> empResponse = testRestTemplate.postForEntity(
+                "/api/employments",
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(10000)), employerHeaders),
+                EmploymentResponse.class);
         employmentId = empResponse.getBody().employmentId();
 
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
-                "/api/worksession/clockIn",
+                "/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders),
                 ClockInResponse.class);
         Long sessionId = clockInResponse.getBody().sessionId();
         Thread.sleep(1000);
-        testRestTemplate.postForEntity("/api/worksession/clockOut",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-out",
                 new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders), Void.class);
     }
 
@@ -124,7 +124,7 @@ public class HistoryIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<Map> response = testRestTemplate.exchange(
-                "/api/history/" + employmentId,
+                "/api/histories/" + employmentId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, headers),
                 Map.class);
@@ -145,7 +145,7 @@ public class HistoryIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<Map> response = testRestTemplate.exchange(
-                "/api/history/" + employmentId,
+                "/api/histories/" + employmentId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, headers),
                 Map.class);
@@ -160,7 +160,7 @@ public class HistoryIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + workerToken2);
         ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/history/" + employmentId,
+                "/api/histories/" + employmentId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, headers),
                 Void.class);

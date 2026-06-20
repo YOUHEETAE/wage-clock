@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/employment")
+@RequestMapping("/api/employments")
 public class EmploymentController {
     private final EmploymentService employmentService;
 
@@ -16,8 +16,8 @@ public class EmploymentController {
     }
 
     @PostMapping
-    public CreateEmploymentResponse createEmployment(@RequestBody CreateEmploymentRequest createEmploymentRequest,
-                                                     @AuthenticationPrincipal Long employerId) {
-        return employmentService.createEmployment(createEmploymentRequest, employerId);
+    public EmploymentResponse createEmployment(@RequestBody EmploymentRequest employmentRequest,
+                                               @AuthenticationPrincipal Long employerId) {
+        return employmentService.createEmployment(employmentRequest, employerId);
     }
 }

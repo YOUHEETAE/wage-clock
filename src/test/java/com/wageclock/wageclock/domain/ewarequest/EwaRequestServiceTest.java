@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.ewa;
+package com.wageclock.wageclock.domain.ewarequest;
 
 import com.wageclock.wageclock.domain.ewatransfer.EwaTransferService;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;

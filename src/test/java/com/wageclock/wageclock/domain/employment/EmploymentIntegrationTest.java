@@ -74,8 +74,8 @@ public class EmploymentIntegrationTest {
         SignupRequest signupWorkerRequest = new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER);
         LoginRequest loginEmployerRequest = new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER);
         LoginRequest loginWorkerRequest = new LoginRequest("worker@test.com", "password", UserRole.WORKER);
-        testRestTemplate.postForEntity("/api/auth/signup", signupEmployerRequest, Void.class);
-        testRestTemplate.postForEntity("/api/auth/signup", signupWorkerRequest, Void.class);
+        testRestTemplate.postForEntity("/api/auth/sign-up", signupEmployerRequest, Void.class);
+        testRestTemplate.postForEntity("/api/auth/sign-up", signupWorkerRequest, Void.class);
         ResponseEntity<LoginResponse> employerResponse = testRestTemplate.postForEntity("/api/auth/login", loginEmployerRequest, LoginResponse.class);
         ResponseEntity<LoginResponse> workerResponse = testRestTemplate.postForEntity("/api/auth/login", loginWorkerRequest, LoginResponse.class);
         employerToken = employerResponse.getBody().token();
@@ -85,26 +85,26 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 정상_employment_생성(){
-        CreateEmploymentRequest body = new CreateEmploymentRequest(workerId, BigDecimal.valueOf(10000));
+        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000));
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<CreateEmploymentRequest> request = new HttpEntity<>(body, headers);
-        ResponseEntity<CreateEmploymentResponse> response = testRestTemplate.postForEntity("/api/employment", request, CreateEmploymentResponse.class);
+        HttpEntity<EmploymentRequest> request = new HttpEntity<>(body, headers);
+        ResponseEntity<EmploymentResponse> response = testRestTemplate.postForEntity("/api/employments", request, EmploymentResponse.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
     @Test
     void 중복_employment_생성_시_예외(){
-        CreateEmploymentRequest body = new CreateEmploymentRequest(workerId, BigDecimal.valueOf(10000));
+        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000));
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<CreateEmploymentRequest> request = new HttpEntity<>(body, headers);
-        ResponseEntity<CreateEmploymentResponse> response = testRestTemplate.postForEntity("/api/employment", request, CreateEmploymentResponse.class);
+        HttpEntity<EmploymentRequest> request = new HttpEntity<>(body, headers);
+        ResponseEntity<EmploymentResponse> response = testRestTemplate.postForEntity("/api/employments", request, EmploymentResponse.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        CreateEmploymentRequest duplicateBody = new CreateEmploymentRequest(workerId, BigDecimal.valueOf(20000));
+        EmploymentRequest duplicateBody = new EmploymentRequest(workerId, BigDecimal.valueOf(20000));
         HttpHeaders duplicateHeaders = new HttpHeaders();
         duplicateHeaders.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<CreateEmploymentRequest> duplicateRequest = new HttpEntity<>(duplicateBody, duplicateHeaders);
-        ResponseEntity<CreateEmploymentResponse> duplicateResponse = testRestTemplate.postForEntity("/api/employment", duplicateRequest, CreateEmploymentResponse.class);
+        HttpEntity<EmploymentRequest> duplicateRequest = new HttpEntity<>(duplicateBody, duplicateHeaders);
+        ResponseEntity<EmploymentResponse> duplicateResponse = testRestTemplate.postForEntity("/api/employments", duplicateRequest, EmploymentResponse.class);
         assertEquals(HttpStatus.CONFLICT, duplicateResponse.getStatusCode());
     }
 }

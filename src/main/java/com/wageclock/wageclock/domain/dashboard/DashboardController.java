@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/dashboard")
+@RequestMapping("/api/dashboards")
 public class DashboardController {
 
     private final DashboardService dashboardService;
@@ -18,6 +18,6 @@ public class DashboardController {
     }
     @GetMapping
     public List<DashboardResponse> getDashboards(@AuthenticationPrincipal Long employerId) {
-        return dashboardService.getDashboard(employerId);
+        return dashboardService.getDashboards(employerId);
     }
 }

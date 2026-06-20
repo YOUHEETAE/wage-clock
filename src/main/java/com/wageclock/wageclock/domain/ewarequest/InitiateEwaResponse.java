@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.ewa;
+package com.wageclock.wageclock.domain.ewarequest;
 
 import java.math.BigDecimal;
 

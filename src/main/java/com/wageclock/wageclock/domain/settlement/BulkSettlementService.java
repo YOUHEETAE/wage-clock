@@ -44,7 +44,7 @@ public class BulkSettlementService {
         this.settlementExecutor = settlementExecutor;
     }
 
-    public BulkSettlementResponse bulkSettlementRequest(List<Long> employmentIds, Long employerId) {
+    public BulkSettlementResponse requestBulkSettlement(List<Long> employmentIds, Long employerId) {
         Employer employer = employerRepository.findById(employerId)
                 .orElseThrow(() -> new NotFoundException("Employer not found"));
         BulkSettlement bulkSettlement = bulkSettlementProcessor.createBulkSettlement(employmentIds, employerId);

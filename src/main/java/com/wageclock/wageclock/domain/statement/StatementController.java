@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/statement")
+@RequestMapping("/api/statements")
 public class StatementController {
 
     private final StatementService statementService;
@@ -18,19 +18,19 @@ public class StatementController {
         this.statementService = statementService;
     }
 
-    @GetMapping("/{payPeriodId}/payperiod")
+    @GetMapping("/{payPeriodId}/pay-period")
     public PayPeriodStatementResponse getPayPeriodStatement(@PathVariable Long payPeriodId,
                                                              @AuthenticationPrincipal Long employerId) {
         return statementService.getPayPeriodStatement(payPeriodId, employerId);
     }
-    @GetMapping("/{payPeriodId}/worksession")
+    @GetMapping("/{payPeriodId}/work-sessions")
     public List<WorkSessionStatementResponse> getWorkSessionStatement(@PathVariable Long payPeriodId,
                                                                        @AuthenticationPrincipal Long employerId) {
-        return statementService.getWorkSessionStatement(payPeriodId, employerId);
+        return statementService.getWorkSessionStatements(payPeriodId, employerId);
     }
-    @GetMapping("/{payPeriodId}/ewarequest")
+    @GetMapping("/{payPeriodId}/ewa-requests")
     public List<EwaRequestStatementResponse> getEwaRequestStatement(@PathVariable Long payPeriodId,
                                                                      @AuthenticationPrincipal Long employerId) {
-        return statementService.getEwaRequestStatement(payPeriodId, employerId);
+        return statementService.getEwaRequestStatements(payPeriodId, employerId);
     }
 }

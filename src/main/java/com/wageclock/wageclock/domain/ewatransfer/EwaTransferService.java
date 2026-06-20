@@ -1,6 +1,6 @@
-package com.wageclock.wageclock.domain.EwaTransfer;
+package com.wageclock.wageclock.domain.ewatransfer;
 
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;

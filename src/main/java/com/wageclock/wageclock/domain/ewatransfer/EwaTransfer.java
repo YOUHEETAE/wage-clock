@@ -1,6 +1,6 @@
-package com.wageclock.wageclock.domain.EwaTransfer;
+package com.wageclock.wageclock.domain.ewatransfer;
 
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;

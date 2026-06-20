@@ -60,7 +60,7 @@ public class AuthIntegrationTest {
     void setUp(){
         signupRequest = new SignupRequest("홍길동", "test@test.com", "password", UserRole.EMPLOYER);
         loginRequest = new LoginRequest("test@test.com", "password", UserRole.EMPLOYER);
-        testRestTemplate.postForEntity("/api/auth/signup", signupRequest, void.class);
+        testRestTemplate.postForEntity("/api/auth/sign-up", signupRequest, void.class);
         ResponseEntity<LoginResponse> response = testRestTemplate.postForEntity("/api/auth/login",loginRequest, LoginResponse.class);
         Assertions.assertNotNull(response.getBody());
         token = response.getBody().token();
@@ -69,13 +69,13 @@ public class AuthIntegrationTest {
     @Test
     void 정상_회원가입(){
         signupRequest = new SignupRequest("아무개", "other@test.com", "password1", UserRole.WORKER);
-        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/auth/signup", signupRequest, void.class);
+        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/auth/sign-up", signupRequest, void.class);
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
     }
 
     @Test
     void 중복_회원가입_시_예외(){
-        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/auth/signup", signupRequest, Void.class);
+        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/auth/sign-up", signupRequest, Void.class);
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
     }
 

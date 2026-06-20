@@ -26,14 +26,14 @@ public class StatementService {
         return statementRepository.getPayPeriodStatement(payPeriodId);
     }
     @Transactional(readOnly = true)
-    public List<WorkSessionStatementResponse> getWorkSessionStatement(Long payPeriodId, Long employerId) {
+    public List<WorkSessionStatementResponse> getWorkSessionStatements(Long payPeriodId, Long employerId) {
         validateEmployerAccess(payPeriodId, employerId);
-        return statementRepository.getWorkSessionStatement(payPeriodId);
+        return statementRepository.getWorkSessionStatements(payPeriodId);
     }
     @Transactional(readOnly = true)
-    public List<EwaRequestStatementResponse> getEwaRequestStatement(Long payPeriodId, Long employerId) {
+    public List<EwaRequestStatementResponse> getEwaRequestStatements(Long payPeriodId, Long employerId) {
         validateEmployerAccess(payPeriodId, employerId);
-        return statementRepository.getEwaRequestStatement(payPeriodId);
+        return statementRepository.getEwaRequestStatements(payPeriodId);
     }
 
     private void validateEmployerAccess(Long payPeriodId, Long employerId) {

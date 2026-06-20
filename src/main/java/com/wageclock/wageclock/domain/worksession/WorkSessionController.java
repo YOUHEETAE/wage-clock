@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/worksession")
+@RequestMapping("/api/work-sessions")
 public class WorkSessionController {
 
     private final WorkSessionService workSessionService;
@@ -15,12 +15,12 @@ public class WorkSessionController {
         this.workSessionService = workSessionService;
     }
 
-    @PostMapping("/clockIn")
+    @PostMapping("/clock-in")
     public ClockInResponse clockIn (@RequestBody ClockInRequest clockInRequest,
                                     @AuthenticationPrincipal Long workerId) {
         return workSessionService.clockIn(clockInRequest, workerId);
     }
-    @PostMapping("/clockOut")
+    @PostMapping("/clock-out")
     public ClockOutResponse clockOut (@RequestBody ClockOutRequest clockOutRequest,
                                       @AuthenticationPrincipal Long workerId) {
         return workSessionService.clockOut(clockOutRequest, workerId);

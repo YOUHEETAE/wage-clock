@@ -1,6 +1,6 @@
 package com.wageclock.wageclock.domain.statement;
 
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -41,7 +41,7 @@ public class StatementRepository {
         ), payPeriodId);
     }
 
-    public List<WorkSessionStatementResponse> getWorkSessionStatement(Long payPeriodId){
+    public List<WorkSessionStatementResponse> getWorkSessionStatements(Long payPeriodId){
         String sql = """
                 SELECT id, clock_in, clock_out, hourly_wage, earned_amount
                 FROM work_sessions WHERE pay_period_id = ?
@@ -60,7 +60,7 @@ public class StatementRepository {
         );}, payPeriodId);
     }
 
-    public List<EwaRequestStatementResponse> getEwaRequestStatement(Long payPeriodId){
+    public List<EwaRequestStatementResponse> getEwaRequestStatements(Long payPeriodId){
         String sql = """
                 SELECT id, requested_amount, status, created_at
                 FROM ewa_requests WHERE pay_period_id = ?

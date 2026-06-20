@@ -25,17 +25,17 @@ public class EmploymentService {
     }
 
     @Transactional
-    public CreateEmploymentResponse createEmployment(CreateEmploymentRequest createEmploymentRequest, Long employerId){
+    public EmploymentResponse createEmployment(EmploymentRequest employmentRequest, Long employerId){
         Employer employer = employerRepository.findById(employerId)
                 .orElseThrow(() -> new NotFoundException("employer not found"));
-        Worker worker = workerRepository.findById(createEmploymentRequest.workerId())
+        Worker worker = workerRepository.findById(employmentRequest.workerId())
                 .orElseThrow(() -> new NotFoundException("worker not found"));
         if(employmentRepository.existsByEmployerIdAndWorkerId(employerId,
-                createEmploymentRequest.workerId())){
+                employmentRequest.workerId())){
             throw new DuplicateException("employment already exists");
         }
         Employment employment = employmentRepository.save(Employment.builder()
-                .employer(employer).worker(worker).hourlyWage(createEmploymentRequest.hourlyWage()).build());
-        return new CreateEmploymentResponse(employment.getId(), createEmploymentRequest.hourlyWage());
+                .employer(employer).worker(worker).hourlyWage(employmentRequest.hourlyWage()).build());
+        return new EmploymentResponse(employment.getId(), employmentRequest.hourlyWage());
     }
 }

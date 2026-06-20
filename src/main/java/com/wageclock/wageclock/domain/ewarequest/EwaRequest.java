@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.ewa;
+package com.wageclock.wageclock.domain.ewarequest;
 
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
@@ -74,10 +74,6 @@ public class EwaRequest extends BaseEntity {
     }
     public void unknown(){
         this.status = EwaRequestStatus.UNKNOWN;
-    }
-    public void failWithRefund(BigDecimal amount){
-        this.status = EwaRequestStatus.FAILED;
-        this.payPeriod.subtractEwaAmount(amount);
     }
     public void refundEwa(BigDecimal amount){
         this.payPeriod.subtractEwaAmount(amount);

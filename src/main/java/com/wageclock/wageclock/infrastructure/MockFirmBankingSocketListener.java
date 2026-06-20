@@ -1,6 +1,6 @@
 package com.wageclock.wageclock.infrastructure;
 
-import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferService;
+import com.wageclock.wageclock.domain.ewatransfer.EwaTransferService;
 import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
