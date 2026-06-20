@@ -55,7 +55,7 @@ public class WorkerIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
         workerToken = testRestTemplate.postForEntity("/api/auth/login",
                         new LoginRequest("worker@test.com", "password", UserRole.WORKER), LoginResponse.class)
@@ -71,7 +71,7 @@ public class WorkerIntegrationTest {
     @Test
     void 계좌_등록_성공() {
         ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/worker/register-account-info",
+                "/api/workers/register-account-info",
                 HttpMethod.POST,
                 new HttpEntity<>(new RegisterAccountInfo("123456789012", "SHINHAN", "박사원"), authHeader(workerToken)),
                 Void.class);
@@ -87,7 +87,7 @@ public class WorkerIntegrationTest {
     @Test
     void 인증_없이_접근_시_예외() {
         ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/worker/register-account-info",
+                "/api/workers/register-account-info",
                 HttpMethod.POST,
                 new HttpEntity<>(new RegisterAccountInfo("123456789012", "SHINHAN", "박사원")),
                 Void.class);

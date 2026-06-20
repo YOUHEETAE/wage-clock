@@ -5,12 +5,12 @@ import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
+import com.wageclock.wageclock.domain.employment.EmploymentRequest;
+import com.wageclock.wageclock.domain.employment.EmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.ewa.EwaRequestDto;
-import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.ewa.EwaResponseDto;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequestDto;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequestRepository;
+import com.wageclock.wageclock.domain.ewarequest.EwaResponseDto;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
@@ -94,9 +94,9 @@ public class PayPeriodIntegrationTest {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
 
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
@@ -111,24 +111,24 @@ public class PayPeriodIntegrationTest {
         // 시급 3,600,000 → 1초당 1,000원 적립
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
-        ResponseEntity<CreateEmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
-                "/api/employment",
-                new HttpEntity<>(new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
-                CreateEmploymentResponse.class);
+        ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
+                "/api/employments",
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
+                EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
 
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
 
         ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
-                "/api/worksession/clockIn",
+                "/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders),
                 ClockInResponse.class);
         this.sessionId = clockInResponse.getBody().sessionId();
 
         // 2초 대기 → 약 2,000원 적립 → 한도 약 600원
         Thread.sleep(2000);
-        testRestTemplate.postForEntity("/api/worksession/clockOut",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-out",
                 new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders), Void.class);
     }
 
@@ -147,7 +147,7 @@ public class PayPeriodIntegrationTest {
     private Long requestEwa(BigDecimal amount) {
         EwaRequestDto requestDto = new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString());
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
-                "/api/ewaRequest/request",
+                "/api/ewa-requests/request",
                 new HttpEntity<>(requestDto, workerHeaders()),
                 EwaResponseDto.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -155,21 +155,21 @@ public class PayPeriodIntegrationTest {
     }
     @Test
     void WORKING_상태_workSession_존재_시_예외(){
-        testRestTemplate.postForEntity("/api/worksession/clockIn",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), Void.class);
         ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + employmentId + "/close",
+                "/api/pay-periods/" + employmentId + "/close",
                 new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
     @Test
     void PAUSED_상태_workSession_존재_시_예외(){
-        testRestTemplate.postForEntity("/api/worksession/clockIn",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), Void.class);
-        testRestTemplate.postForEntity("/api/worksession/pause",
+        testRestTemplate.postForEntity("/api/work-sessions/pause",
                 new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders()), Void.class);
         ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + employmentId + "/close",
+                "/api/pay-periods/" + employmentId + "/close",
                 new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
@@ -177,14 +177,14 @@ public class PayPeriodIntegrationTest {
     void 다른_고용주_close_요청_시_예외(){
         Long otherEmploymentId = 3L;
         ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + otherEmploymentId + "/close",
+                "/api/pay-periods/" + otherEmploymentId + "/close",
                 new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
     @Test
     void 정상_close_검증(){
         ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/payperiod/" + employmentId + "/close",
+                "/api/pay-periods/" + employmentId + "/close",
                 new HttpEntity<>(null , employerHeaders()), ClosePayPeriodResponse.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         PayPeriod payPeriod = payPeriodRepository.findAll().get(0);
@@ -195,7 +195,7 @@ public class PayPeriodIntegrationTest {
     @Test
     void 정상_summary_조회() {
         ResponseEntity<PayPeriodSummaryResponse> response = testRestTemplate.exchange(
-                "/api/payperiod/" + employmentId + "/summary",
+                "/api/pay-periods/" + employmentId + "/summary",
                 HttpMethod.GET,
                 new HttpEntity<>(null, workerHeaders()),
                 PayPeriodSummaryResponse.class);
@@ -206,12 +206,12 @@ public class PayPeriodIntegrationTest {
 
     @Test
     void WORKING_세션_있을_때_currentEarned_반영() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/worksession/clockIn",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()), ClockInResponse.class);
         Thread.sleep(1000);
 
         ResponseEntity<PayPeriodSummaryResponse> response = testRestTemplate.exchange(
-                "/api/payperiod/" + employmentId + "/summary",
+                "/api/pay-periods/" + employmentId + "/summary",
                 HttpMethod.GET,
                 new HttpEntity<>(null, workerHeaders()),
                 PayPeriodSummaryResponse.class);
@@ -221,7 +221,7 @@ public class PayPeriodIntegrationTest {
 
     @Test
     void 다른_워커_접근_시_예외() {
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("다른워커", "other@test.com", "password", UserRole.WORKER), Void.class);
         String otherToken = testRestTemplate.postForEntity("/api/auth/login",
                         new LoginRequest("other@test.com", "password", UserRole.WORKER), LoginResponse.class)
@@ -230,7 +230,7 @@ public class PayPeriodIntegrationTest {
         otherHeaders.set("Authorization", "Bearer " + otherToken);
 
         ResponseEntity<PayPeriodSummaryResponse> response = testRestTemplate.exchange(
-                "/api/payperiod/" + employmentId + "/summary",
+                "/api/pay-periods/" + employmentId + "/summary",
                 HttpMethod.GET,
                 new HttpEntity<>(null, otherHeaders),
                 PayPeriodSummaryResponse.class);

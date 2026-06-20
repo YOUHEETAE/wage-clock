@@ -5,8 +5,8 @@ import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
+import com.wageclock.wageclock.domain.employment.EmploymentRequest;
+import com.wageclock.wageclock.domain.employment.EmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.outbox.*;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
@@ -86,9 +86,9 @@ public class BulkSettlementIntegrationTest {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
                 new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER),
@@ -99,19 +99,19 @@ public class BulkSettlementIntegrationTest {
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
 
         HttpHeaders employerHeaders = employerHeaders();
-        ResponseEntity<CreateEmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
-                "/api/employment",
-                new HttpEntity<>(new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
-                CreateEmploymentResponse.class);
+        ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
+                "/api/employments",
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
+                EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
 
         ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
-                "/api/worksession/clockIn",
+                "/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()),
                 ClockInResponse.class);
         Long sessionId = clockInResponse.getBody().sessionId();
         Thread.sleep(2000);
-        testRestTemplate.postForEntity("/api/worksession/clockOut",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-out",
                 new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders()), Void.class);
     }
 
@@ -139,7 +139,7 @@ public class BulkSettlementIntegrationTest {
     }
 
     private Long setupSecondWorker() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("이직원", "worker2@test.com", "password", UserRole.WORKER), Void.class);
         String workerToken2 = testRestTemplate.postForEntity("/api/auth/login",
                 new LoginRequest("worker2@test.com", "password", UserRole.WORKER),
@@ -150,22 +150,22 @@ public class BulkSettlementIntegrationTest {
         headers2.set("Authorization", "Bearer " + workerToken2);
 
         Long employmentId2 = testRestTemplate.postForEntity(
-                "/api/employment",
-                new HttpEntity<>(new CreateEmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000)), employerHeaders()),
-                CreateEmploymentResponse.class).getBody().employmentId();
+                "/api/employments",
+                new HttpEntity<>(new EmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000)), employerHeaders()),
+                EmploymentResponse.class).getBody().employmentId();
 
         Long sessionId2 = testRestTemplate.postForEntity(
-                "/api/worksession/clockIn",
+                "/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId2), headers2),
                 ClockInResponse.class).getBody().sessionId();
         Thread.sleep(2000);
-        testRestTemplate.postForEntity("/api/worksession/clockOut",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-out",
                 new HttpEntity<>(new ClockOutRequest(sessionId2), headers2), Void.class);
         return employmentId2;
     }
 
     private void requestAndTriggerSettlement(List<Long> employmentIds) {
-        testRestTemplate.postForEntity("/api/settlement/request",
+        testRestTemplate.postForEntity("/api/settlements/request",
                 new HttpEntity<>(employmentIds, employerHeaders()),
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
@@ -181,7 +181,7 @@ public class BulkSettlementIntegrationTest {
                 .thenReturn(new VirtualAccountResult("Toss", "1234-5678", "2026-12-31"));
 
         ResponseEntity<BulkSettlementResponse> response = testRestTemplate.postForEntity(
-                "/api/settlement/request",
+                "/api/settlements/request",
                 new HttpEntity<>(List.of(employmentId), employerHeaders()),
                 BulkSettlementResponse.class);
 
@@ -199,7 +199,7 @@ public class BulkSettlementIntegrationTest {
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenReturn(new WageTransferResult("TX-001", null, null));
 
-        testRestTemplate.postForEntity("/api/settlement/request",
+        testRestTemplate.postForEntity("/api/settlements/request",
                 new HttpEntity<>(List.of(employmentId), employerHeaders()),
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
@@ -224,7 +224,7 @@ public class BulkSettlementIntegrationTest {
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
-        testRestTemplate.postForEntity("/api/settlement/request",
+        testRestTemplate.postForEntity("/api/settlements/request",
                 new HttpEntity<>(List.of(employmentId), employerHeaders()),
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
@@ -295,7 +295,7 @@ public class BulkSettlementIntegrationTest {
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenReturn(new WageTransferResult("2TX001", null, null));
 
-        testRestTemplate.postForEntity("/api/settlement/request",
+        testRestTemplate.postForEntity("/api/settlements/request",
                 new HttpEntity<>(List.of(employmentId), employerHeaders()),
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();

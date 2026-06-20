@@ -16,7 +16,7 @@ public class AuthController {
     public LoginResponse login(@RequestBody LoginRequest loginRequest) {
         return authService.login(loginRequest);
     }
-    @PostMapping("/signup")
+    @PostMapping("/sign-up")
     @ResponseStatus(HttpStatus.CREATED)
     public void signup(@RequestBody SignupRequest signupRequest) {
         authService.signup(signupRequest);

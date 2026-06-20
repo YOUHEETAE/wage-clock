@@ -4,8 +4,8 @@ import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
+import com.wageclock.wageclock.domain.employment.EmploymentRequest;
+import com.wageclock.wageclock.domain.employment.EmploymentResponse;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
@@ -82,8 +82,8 @@ public class WorkSessionIntegrationTest {
         LoginRequest loginEmployerRequest = new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER);
         LoginRequest loginWorkerRequest = new LoginRequest("worker@test.com", "password", UserRole.WORKER);
 
-        testRestTemplate.postForEntity("/api/auth/signup", signupEmployerRequest, Void.class);
-        testRestTemplate.postForEntity("/api/auth/signup", signupWorkerRequest, Void.class);
+        testRestTemplate.postForEntity("/api/auth/sign-up", signupEmployerRequest, Void.class);
+        testRestTemplate.postForEntity("/api/auth/sign-up", signupWorkerRequest, Void.class);
 
         ResponseEntity<LoginResponse> employerResponse = testRestTemplate.postForEntity("/api/auth/login", loginEmployerRequest, LoginResponse.class);
         ResponseEntity<LoginResponse> workerResponse = testRestTemplate.postForEntity("/api/auth/login", loginWorkerRequest, LoginResponse.class);
@@ -92,11 +92,11 @@ public class WorkSessionIntegrationTest {
         workerToken = workerResponse.getBody().token();
 
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-        CreateEmploymentRequest employmentRequest = new CreateEmploymentRequest(workerId, BigDecimal.valueOf(10000));
+        EmploymentRequest employmentRequest = new EmploymentRequest(workerId, BigDecimal.valueOf(10000));
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<CreateEmploymentRequest> employmentHttpRequest = new HttpEntity<>(employmentRequest, employerHeaders);
-        ResponseEntity<CreateEmploymentResponse> employmentResponse = testRestTemplate.postForEntity("/api/employment", employmentHttpRequest, CreateEmploymentResponse.class);
+        HttpEntity<EmploymentRequest> employmentHttpRequest = new HttpEntity<>(employmentRequest, employerHeaders);
+        ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity("/api/employments", employmentHttpRequest, EmploymentResponse.class);
         employmentId = employmentResponse.getBody().employmentId();
     }
 
@@ -106,7 +106,7 @@ public class WorkSessionIntegrationTest {
         headers.set("Authorization", "Bearer " + workerToken);
         HttpEntity<ClockInRequest> request = new HttpEntity<>(new ClockInRequest(employmentId), headers);
 
-        ResponseEntity<ClockInResponse> response = testRestTemplate.postForEntity("/api/worksession/clockIn", request, ClockInResponse.class);
+        ResponseEntity<ClockInResponse> response = testRestTemplate.postForEntity("/api/work-sessions/clock-in", request, ClockInResponse.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody().sessionId());
@@ -118,11 +118,11 @@ public class WorkSessionIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + workerToken);
         HttpEntity<ClockInRequest> clockInRequest = new HttpEntity<>(new ClockInRequest(employmentId), headers);
-        ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity("/api/worksession/clockIn", clockInRequest, ClockInResponse.class);
+        ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity("/api/work-sessions/clock-in", clockInRequest, ClockInResponse.class);
         Long sessionId = clockInResponse.getBody().sessionId();
 
         HttpEntity<ClockOutRequest> clockOutRequest = new HttpEntity<>(new ClockOutRequest(sessionId), headers);
-        ResponseEntity<ClockOutResponse> clockOutResponse = testRestTemplate.postForEntity("/api/worksession/clockOut", clockOutRequest, ClockOutResponse.class);
+        ResponseEntity<ClockOutResponse> clockOutResponse = testRestTemplate.postForEntity("/api/work-sessions/clock-out", clockOutRequest, ClockOutResponse.class);
 
         assertEquals(HttpStatus.OK, clockOutResponse.getStatusCode());
         assertNotNull(clockOutResponse.getBody().clockOut());
@@ -135,11 +135,11 @@ public class WorkSessionIntegrationTest {
         headers.set("Authorization", "Bearer " + workerToken);
 
         ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
-                "/api/worksession/clockIn", new HttpEntity<>(new ClockInRequest(employmentId), headers), ClockInResponse.class);
+                "/api/work-sessions/clock-in", new HttpEntity<>(new ClockInRequest(employmentId), headers), ClockInResponse.class);
         Long sessionId = clockInResponse.getBody().sessionId();
 
         ResponseEntity<Void> pauseResponse = testRestTemplate.postForEntity(
-                "/api/worksession/pause", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
+                "/api/work-sessions/pause", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
 
         assertEquals(HttpStatus.OK, pauseResponse.getStatusCode());
         WorkSession workSession = workSessionRepository.findById(sessionId).get();
@@ -152,13 +152,13 @@ public class WorkSessionIntegrationTest {
         headers.set("Authorization", "Bearer " + workerToken);
 
         ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
-                "/api/worksession/clockIn", new HttpEntity<>(new ClockInRequest(employmentId), headers), ClockInResponse.class);
+                "/api/work-sessions/clock-in", new HttpEntity<>(new ClockInRequest(employmentId), headers), ClockInResponse.class);
         Long sessionId = clockInResponse.getBody().sessionId();
 
         testRestTemplate.postForEntity(
-                "/api/worksession/pause", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
+                "/api/work-sessions/pause", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
         ResponseEntity<Void> resumeResponse = testRestTemplate.postForEntity(
-                "/api/worksession/resume", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
+                "/api/work-sessions/resume", new HttpEntity<>(new ClockOutRequest(sessionId), headers), Void.class);
 
         assertEquals(HttpStatus.OK, resumeResponse.getStatusCode());
         WorkSession workSession = workSessionRepository.findById(sessionId).get();

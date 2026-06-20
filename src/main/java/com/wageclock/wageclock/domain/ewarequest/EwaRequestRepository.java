@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.ewa;
+package com.wageclock.wageclock.domain.ewarequest;
 
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;

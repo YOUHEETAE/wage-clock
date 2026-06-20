@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/settlement")
+@RequestMapping("/api/settlements")
 public class BulkSettlementController {
 
     private final BulkSettlementService bulkSettlementService;
@@ -16,8 +16,8 @@ public class BulkSettlementController {
     }
 
     @PostMapping("/request")
-    public BulkSettlementResponse bulkSettlementRequest(@RequestBody List<Long> employmentIds,
+    public BulkSettlementResponse request(@RequestBody List<Long> employmentIds,
                                                         @AuthenticationPrincipal Long employerId) {
-        return bulkSettlementService.bulkSettlementRequest(employmentIds, employerId);
+        return bulkSettlementService.requestBulkSettlement(employmentIds, employerId);
     }
 }

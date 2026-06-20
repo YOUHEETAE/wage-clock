@@ -14,7 +14,7 @@ public class DashboardService {
         this.dashboardRepository = dashboardRepository;
     }
 
-    public List<DashboardResponse> getDashboard(Long employerId){
-        return dashboardRepository.getDashboard(employerId);
+    public List<DashboardResponse> getDashboards(Long employerId){
+        return dashboardRepository.getDashboards(employerId);
     }
 }

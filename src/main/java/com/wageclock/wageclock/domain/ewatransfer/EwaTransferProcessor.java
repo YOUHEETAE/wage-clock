@@ -1,6 +1,6 @@
-package com.wageclock.wageclock.domain.EwaTransfer;
+package com.wageclock.wageclock.domain.ewatransfer;
 
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;

@@ -48,7 +48,7 @@ public class EmploymentServiceTest {
     @Test
     void employer_없음_예외() {
         when(employerRepository.findById(1L)).thenReturn(Optional.empty());
-        CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
+        EmploymentRequest request = new EmploymentRequest(2L, BigDecimal.valueOf(10000));
         assertThrows(NotFoundException.class, () -> employmentService.createEmployment(request, 1L));
     }
 
@@ -56,7 +56,7 @@ public class EmploymentServiceTest {
     void worker_없음_예외() {
         when(employerRepository.findById(1L)).thenReturn(Optional.of(employer));
         when(workerRepository.findById(2L)).thenReturn(Optional.empty());
-        CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
+        EmploymentRequest request = new EmploymentRequest(2L, BigDecimal.valueOf(10000));
         assertThrows(NotFoundException.class, () -> employmentService.createEmployment(request, 1L));
     }
 
@@ -65,7 +65,7 @@ public class EmploymentServiceTest {
         when(employerRepository.findById(1L)).thenReturn(Optional.of(employer));
         when(workerRepository.findById(2L)).thenReturn(Optional.of(worker));
         when(employmentRepository.existsByEmployerIdAndWorkerId(1L, 2L)).thenReturn(true);
-        CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
+        EmploymentRequest request = new EmploymentRequest(2L, BigDecimal.valueOf(10000));
         assertThrows(DuplicateException.class, () -> employmentService.createEmployment(request, 1L));
     }
 
@@ -77,8 +77,8 @@ public class EmploymentServiceTest {
         when(employmentRepository.save(any())).thenReturn(savedEmployment);
         when(savedEmployment.getId()).thenReturn(10L);
 
-        CreateEmploymentRequest request = new CreateEmploymentRequest(2L, BigDecimal.valueOf(10000));
-        CreateEmploymentResponse response = employmentService.createEmployment(request, 1L);
+        EmploymentRequest request = new EmploymentRequest(2L, BigDecimal.valueOf(10000));
+        EmploymentResponse response = employmentService.createEmployment(request, 1L);
 
         assertEquals(10L, response.employmentId());
         assertEquals(BigDecimal.valueOf(10000), response.hourlyWage());

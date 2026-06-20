@@ -1,18 +1,18 @@
-package com.wageclock.wageclock.domain.EwaTransfer;
+package com.wageclock.wageclock.domain.ewatransfer;
 
 import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentRequest;
-import com.wageclock.wageclock.domain.employment.CreateEmploymentResponse;
+import com.wageclock.wageclock.domain.employment.EmploymentRequest;
+import com.wageclock.wageclock.domain.employment.EmploymentResponse;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
-import com.wageclock.wageclock.domain.ewa.EwaRequestDto;
-import com.wageclock.wageclock.domain.ewa.EwaRequestRepository;
-import com.wageclock.wageclock.domain.ewa.EwaResponseDto;
-import com.wageclock.wageclock.domain.ewa.InitiateEwaResponse;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequestDto;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequestRepository;
+import com.wageclock.wageclock.domain.ewarequest.EwaResponseDto;
+import com.wageclock.wageclock.domain.ewarequest.InitiateEwaResponse;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
 import com.wageclock.wageclock.domain.outbox.OutBoxScheduler;
@@ -91,9 +91,9 @@ public class EwaTransferIntegrationTest {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/signup",
+        testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
 
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
@@ -106,16 +106,16 @@ public class EwaTransferIntegrationTest {
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
 
         employmentId = testRestTemplate.postForEntity(
-                "/api/employment",
-                new HttpEntity<>(new CreateEmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders()),
-                CreateEmploymentResponse.class).getBody().employmentId();
+                "/api/employments",
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders()),
+                EmploymentResponse.class).getBody().employmentId();
 
         Long sessionId = testRestTemplate.postForEntity(
-                "/api/worksession/clockIn",
+                "/api/work-sessions/clock-in",
                 new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()),
                 ClockInResponse.class).getBody().sessionId();
         Thread.sleep(2000);
-        testRestTemplate.postForEntity("/api/worksession/clockOut",
+        testRestTemplate.postForEntity("/api/work-sessions/clock-out",
                 new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders()), Void.class);
     }
 
@@ -145,7 +145,7 @@ public class EwaTransferIntegrationTest {
 
     private Long requestEwa(BigDecimal amount) {
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
-                "/api/ewaRequest/request",
+                "/api/ewa-requests/request",
                 new HttpEntity<>(new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString()), workerHeaders()),
                 EwaResponseDto.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -154,7 +154,7 @@ public class EwaTransferIntegrationTest {
 
     private Long initiateEwa(Long ewaId) {
         testRestTemplate.postForEntity(
-                "/api/ewaRequest/" + ewaId + "/initiateEwa",
+                "/api/ewa-requests/" + ewaId + "/initiate",
                 new HttpEntity<>(null, employerHeaders()),
                 InitiateEwaResponse.class);
         return ewaTransferRepository.findAll().get(0).getId();
@@ -169,7 +169,7 @@ public class EwaTransferIntegrationTest {
                 .thenReturn(new WageTransferResult("TX-001", null, null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
                 new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
@@ -190,7 +190,7 @@ public class EwaTransferIntegrationTest {
                 .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
                 new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
@@ -208,7 +208,7 @@ public class EwaTransferIntegrationTest {
                 .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
                 new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
 
         assertEquals(EwaTransfer.EwaTransferStatus.PENDING_INQUIRY,
@@ -233,7 +233,7 @@ public class EwaTransferIntegrationTest {
                 .thenThrow(new RuntimeException("네트워크 오류"));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
                 new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
@@ -249,7 +249,7 @@ public class EwaTransferIntegrationTest {
                 .thenThrow(new RuntimeException("네트워크 오류"));
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
-        testRestTemplate.postForEntity("/api/ewaRequest/" + ewaId + "/initiateEwa",
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
                 new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
 
         assertEquals(EwaTransfer.EwaTransferStatus.UNKNOWN,

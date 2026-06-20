@@ -1,10 +1,10 @@
-package com.wageclock.wageclock.domain.ewa;
+package com.wageclock.wageclock.domain.ewarequest;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/ewaRequest")
+@RequestMapping("/api/ewa-requests")
 public class EwaRequestController {
 
     private final EwaRequestService ewaRequestService;
@@ -17,8 +17,8 @@ public class EwaRequestController {
                                   @AuthenticationPrincipal Long workerId) {
         return ewaRequestService.requestEwa(requestDto, workerId);
     }
-    @PostMapping("/{ewaRequestId}/initiateEwa")
-    public InitiateEwaResponse approve(@PathVariable Long ewaRequestId,
+    @PostMapping("/{ewaRequestId}/initiate")
+    public InitiateEwaResponse initiate(@PathVariable Long ewaRequestId,
                                   @AuthenticationPrincipal Long employerId) {
         return ewaRequestService.initiateEwa(ewaRequestId, employerId);
     }

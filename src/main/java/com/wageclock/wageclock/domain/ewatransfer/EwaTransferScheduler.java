@@ -1,4 +1,4 @@
-package com.wageclock.wageclock.domain.EwaTransfer;
+package com.wageclock.wageclock.domain.ewatransfer;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

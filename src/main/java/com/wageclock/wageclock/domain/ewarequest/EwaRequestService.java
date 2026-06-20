@@ -1,6 +1,6 @@
-package com.wageclock.wageclock.domain.ewa;
+package com.wageclock.wageclock.domain.ewarequest;
 
-import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferService;
+import com.wageclock.wageclock.domain.ewatransfer.EwaTransferService;
 import com.wageclock.wageclock.global.exception.TooManyRequestsException;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;

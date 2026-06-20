@@ -1,6 +1,6 @@
 package com.wageclock.wageclock.domain.history;
 
-import com.wageclock.wageclock.domain.ewa.EwaRequest;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
