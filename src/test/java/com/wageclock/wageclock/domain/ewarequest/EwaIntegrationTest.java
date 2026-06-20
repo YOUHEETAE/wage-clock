@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.domain.ewa;
 
-import com.wageclock.wageclock.domain.EwaTransfer.EwaTransfer;
-import com.wageclock.wageclock.domain.EwaTransfer.EwaTransferRepository;
+import com.wageclock.wageclock.domain.ewatransfer.EwaTransfer;
+import com.wageclock.wageclock.domain.ewatransfer.EwaTransferRepository;
 import com.wageclock.wageclock.domain.auth.LoginRequest;
 import com.wageclock.wageclock.domain.auth.LoginResponse;
 import com.wageclock.wageclock.domain.auth.SignupRequest;
