@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.employment;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,6 +16,7 @@ public class EmploymentController {
         this.employmentService = employmentService;
     }
 
+    @Operation(summary = "고용 관계 등록 (고용주가 근로자 채용)")
     @PostMapping
     public EmploymentResponse createEmployment(@RequestBody EmploymentRequest employmentRequest,
                                                @AuthenticationPrincipal Long employerId) {
