@@ -36,6 +36,7 @@ public class BulkSettlementItem {
     @Enumerated(EnumType.STRING)
     private BulkSettlementItemStatus status;
 
+
     public enum BulkSettlementItemStatus {
         PENDING,
         PENDING_INQUIRY,
@@ -80,4 +81,5 @@ public class BulkSettlementItem {
     public Long getWorkerId(){
         return payPeriod.getWorkerId();
     }
+
 }

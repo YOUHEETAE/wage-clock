@@ -84,7 +84,7 @@ class BulkSettlementServiceTest {
         bulkSettlementService.initiateBulkSettlement("BULK-001");
 
         verify(bulkSettlementProcessor).markPendingInquiry(10L);
-        verify(bulkSettlementProcessor).failSettlement("BULK-001");
+        verify(bulkSettlementProcessor).transferFailSettlement("BULK-001");
     }
 
     @Test
@@ -101,7 +101,7 @@ class BulkSettlementServiceTest {
         bulkSettlementService.initiateBulkSettlement("BULK-001");
 
         verify(bulkSettlementProcessor).unknownItem(10L);
-        verify(bulkSettlementProcessor).failSettlement("BULK-001");
+        verify(bulkSettlementProcessor).transferFailSettlement("BULK-001");
     }
 
     @Test
