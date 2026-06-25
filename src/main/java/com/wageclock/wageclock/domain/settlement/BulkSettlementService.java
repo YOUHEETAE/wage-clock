@@ -11,10 +11,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -67,59 +67,18 @@ public class BulkSettlementService {
                 .collect(Collectors.toMap(Worker::getId, Function.identity()));
 
         List<CompletableFuture<TransferItemResult>> futures = contexts.bulkSettlementItemContexts().stream()
-                .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() -> {
-                                    Worker worker = Optional.ofNullable(workerMap.get(context.workerId()))
-                                            .orElseThrow(() -> new NotFoundException("Worker not found"));
-                                    String messageNo = wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT);
-                                    bulkSettlementProcessor.assignMessageNo(context.itemId(), messageNo);
-                                    WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), messageNo);
-                                    if (result.transferId() != null) {
-                                        return new TransferItemResult.Success(context.itemId(), result.transferId());
-                                    }else if(result.pendingMessageNo() != null) {
-
-                                        return new TransferItemResult.PendingInquiry(context.itemId(), result.pendingMessageNo());
-                                    } else if (result.failureReason() != null) {
-                                        return new TransferItemResult.Fail(context.itemId(), result.failureReason());
-                                        //todo : 확정 실패시 알림 발송 필요
-                                    }
-                                    return new TransferItemResult.Unknown(context.itemId());
-                                }, settlementExecutor)
-                                .exceptionally(e -> {
-                                      log.error("이체 결과 조회 실패 itemId={}", context.itemId(), e);
-                                      return new TransferItemResult.Unknown(context.itemId());
-                                })
-
-                ).toList();
-
-        try {
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-                    .orTimeout(30, TimeUnit.SECONDS)
-                    .join();
-        } catch (Exception e) {
-            log.error("이체 타임아웃", e);
-            bulkSettlementProcessor.failSettlement(portOnePaymentId);
-            return;
-        }
-
+                .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() ->
+                                processItem(context, workerMap), settlementExecutor)
+                        .orTimeout(30, TimeUnit.SECONDS)
+                        .exceptionally(e -> handleTransferException(e, context.itemId()))).toList();
         List<TransferItemResult> results = futures.stream()
                 .map(CompletableFuture::join)
                 .toList();
-        results.forEach(result -> {
-            switch (result) {
-                case TransferItemResult.Success s ->
-                    bulkSettlementProcessor.completeItem(s.itemId());
-                case TransferItemResult.PendingInquiry p ->
-                    bulkSettlementProcessor.markPendingInquiry(p.itemId());
-                case TransferItemResult.Fail f ->
-                    bulkSettlementProcessor.failItem(f.itemId());
-                case TransferItemResult.Unknown u ->
-                    bulkSettlementProcessor.unknownItem(u.itemId());
-            }
-        });
+        results.forEach(this::applyResult);
         boolean anyNotCompleted = results.stream()
                 .anyMatch(r -> !(r instanceof TransferItemResult.Success));
         if (anyNotCompleted) {
-            bulkSettlementProcessor.failSettlement(portOnePaymentId);
+            bulkSettlementProcessor.transferFailSettlement(portOnePaymentId);
             return;
         }
         bulkSettlementProcessor.completeSettlement(portOnePaymentId);
@@ -131,45 +90,16 @@ public class BulkSettlementService {
         List<CompletableFuture<TransferItemResult>> inquiryFutures = inquiryContexts.bulkSettlementItemContexts().stream()
                 .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() -> {
                     WageTransferResult result = wageTransferPort.inquireTransfer(context.messageNo());
-                    if (result.transferId() != null) {
-                        return new TransferItemResult.Success(context.itemId(), result.transferId());
-                    } else if (result.pendingMessageNo() != null) {
-                        return new TransferItemResult.PendingInquiry(context.itemId(), result.pendingMessageNo());
-                    }else if(result.failureReason() != null) {
-                        return new TransferItemResult.Fail(context.itemId(), result.failureReason());
-                        //todo : 확정 실패시 알림 발송 필요
-                    }
-                    return new TransferItemResult.Unknown(context.itemId());
+                    return toTransferItemResult(result, context);
                 }, settlementExecutor
-                ).exceptionally(e -> {
-                    log.error("이체 결과 조회 실패 itemId={}", context.itemId(), e);
-                    return new TransferItemResult.Unknown(context.itemId());
-                })).toList();
-        try {
-            CompletableFuture.allOf(inquiryFutures.toArray(new CompletableFuture[0]))
-                    .orTimeout(30, TimeUnit.SECONDS)
-                    .join();
-        } catch (Exception e) {
-            log.error("이체 타임아웃", e);
-            bulkSettlementProcessor.failSettlement(portOnePaymentId);
-            return;
-        }
+                ).orTimeout(30, TimeUnit.SECONDS)
+                        .exceptionally(e -> handleTransferException(e, context.itemId()))).toList();
         List<TransferItemResult> results = inquiryFutures.stream()
                 .map(CompletableFuture::join)
                 .toList();
-        results.forEach(result -> {
-            switch (result) {
-                case TransferItemResult.Success s ->
-                    bulkSettlementProcessor.completeItem(s.itemId());
-                case TransferItemResult.PendingInquiry p ->
-                    bulkSettlementProcessor.markPendingInquiry(p.itemId());
-                case TransferItemResult.Fail f ->
-                    bulkSettlementProcessor.failItem(f.itemId());
-                case TransferItemResult.Unknown u ->
-                    bulkSettlementProcessor.unknownItem(u.itemId());
-            }
-        });
-        // PENDING/FAILED 아이템 재이체
+
+        results.forEach(this::applyResult);
+        // PENDING 아이템 재이체
         initiateBulkSettlement(portOnePaymentId);
     }
 
@@ -179,4 +109,62 @@ public class BulkSettlementService {
      public void receiveInterBankFailure(String transferId){
         bulkSettlementProcessor.receiveInterBankFailure(transferId);
      }
+
+     //캡슐화 메서드
+    private String issueTransferMessageNo(BulkSettlementItemContext context) {
+        String messageNo = wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT);
+        bulkSettlementProcessor.assignMessageNo(context.itemId(), messageNo);
+        return messageNo;
+    }
+    private TransferItemResult toTransferItemResult(WageTransferResult result, BulkSettlementItemContext context) {
+        if (result.transferId() != null) {
+            return new TransferItemResult.Success(context.itemId(), result.transferId());
+        }else if(result.pendingMessageNo() != null) {
+
+            return new TransferItemResult.PendingInquiry(context.itemId(), result.pendingMessageNo());
+        } else if (result.failureReason() != null) {
+            return new TransferItemResult.Fail(context.itemId(), result.failureReason());
+            //todo : 확정 실패시 알림 발송 필요
+        }
+        return new TransferItemResult.Unknown(context.itemId());
+    }
+    private void applyResult(TransferItemResult result){
+        switch (result) {
+            case TransferItemResult.Success s ->
+                bulkSettlementProcessor.completeItem(s.itemId());
+            case TransferItemResult.PendingInquiry p ->
+                bulkSettlementProcessor.markPendingInquiry(p.itemId());
+            case TransferItemResult.Fail f ->
+                bulkSettlementProcessor.failItem(f.itemId());
+            case TransferItemResult.Unknown u ->
+                bulkSettlementProcessor.unknownItem(u.itemId());
+            case TransferItemResult.Retryable r -> {}
+        }
+    }
+    private TransferItemResult processItem(BulkSettlementItemContext context,
+                                           Map<Long, Worker> workerMap){
+        Worker worker = workerMap.get(context.workerId());
+        if (worker == null) {
+            log.error("Worker not found itemId={}, workerId={}", context.itemId(), context.workerId());
+            return new TransferItemResult.Fail(context.itemId(), "Worker not found");
+        }
+        String messageNo;
+        try {
+            messageNo = issueTransferMessageNo(context);
+        }catch (Exception e){
+            log.error("messageNo 발급/저장 실패 itemId={}", context.itemId(), e);
+            return new TransferItemResult.Retryable(context.itemId());
+            //todo: 일정 횟수 이상 반복되면 운영팀 알림 필요 (MAX_RETRY 미구현)
+        }
+        WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), messageNo);
+        return toTransferItemResult(result, context);
+    }
+    private TransferItemResult handleTransferException(Throwable e, Long itemId) {
+        if (e instanceof TimeoutException || e.getCause() instanceof TimeoutException) {
+            log.error("이체 조회 타임아웃 itemId={}", itemId, e);
+        } else {
+            log.error("이체 처리 중 예외 itemId={}", itemId, e);
+        }
+        return new TransferItemResult.Unknown(itemId);
+    }
 }

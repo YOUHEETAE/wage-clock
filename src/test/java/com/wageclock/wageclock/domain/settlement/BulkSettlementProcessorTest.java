@@ -163,7 +163,7 @@ class BulkSettlementProcessorTest {
         item2.completed();
         bulkSettlement.addItem(item1);
         bulkSettlement.addItem(item2);
-        when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
+        when(bulkSettlementRepository.findByPortOnePaymentIdWithLock("BULK-test")).thenReturn(Optional.of(bulkSettlement));
 
         bulkSettlementProcessor.completeSettlement("BULK-test");
 
@@ -182,7 +182,7 @@ class BulkSettlementProcessorTest {
         item2.failed();
         bulkSettlement.addItem(item1);
         bulkSettlement.addItem(item2);
-        when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
+        when(bulkSettlementRepository.findByPortOnePaymentIdWithLock("BULK-test")).thenReturn(Optional.of(bulkSettlement));
 
         bulkSettlementProcessor.completeSettlement("BULK-test");
 
@@ -195,10 +195,12 @@ class BulkSettlementProcessorTest {
         BulkSettlement bulkSettlement = mock(BulkSettlement.class);
         when(bulkSettlement.getPortOnePaymentId()).thenReturn("BULK-test");
         when(bulkSettlement.getId()).thenReturn(1L);
+        when(bulkSettlement.getStatus()).thenReturn(BulkSettlement.BulkSettlementStatus.COMPLETED);
         BulkSettlementItem item = BulkSettlementItem.builder()
                 .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(50000)).build();
         item.assignMessageNo("TX-001");
         when(bulkSettlementItemRepository.findByMessageNo("TX-001")).thenReturn(Optional.of(item));
+        when(bulkSettlementRepository.findByPortOnePaymentIdWithLock("BULK-test")).thenReturn(Optional.of(bulkSettlement));
 
         bulkSettlementProcessor.receiveInterBankFailure("TX-001");
 
@@ -218,7 +220,7 @@ class BulkSettlementProcessorTest {
                 .bulkSettlement(bulkSettlement).payPeriod(mock(PayPeriod.class)).amount(BigDecimal.valueOf(50000)).build();
         bulkSettlement.addItem(item);
         when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
+        when(bulkSettlementRepository.findByPortOnePaymentIdWithLock("BULK-test")).thenReturn(Optional.of(bulkSettlement));
 
         bulkSettlementProcessor.completeRetry(1L);
 
