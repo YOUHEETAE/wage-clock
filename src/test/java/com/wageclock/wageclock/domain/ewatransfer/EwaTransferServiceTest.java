@@ -148,6 +148,34 @@ class EwaTransferServiceTest {
     }
 
     @Test
+    void processTransfer_messageNo발급실패_failTransfer_호출() {
+        EwaRequest ewaRequest = mock(EwaRequest.class);
+        EwaTransfer ewaTransfer = mock(EwaTransfer.class);
+        when(ewaTransfer.getId()).thenReturn(1L);
+        when(ewaTransferProcessor.createEwaTransfer(ewaRequest)).thenReturn(ewaTransfer);
+        when(wageTransferPort.prepareTransfer(TransferType.EWA)).thenThrow(new RuntimeException("Redis 장애"));
+
+        ewaTransferService.processTransfer(ewaRequest);
+
+        verify(ewaTransferProcessor).failTransfer(1L);
+        verify(ewaTransferProcessor, never()).unknownTransfer(any());
+        verify(wageTransferPort, never()).transfer(any(), any(), any());
+    }
+
+    @Test
+    void inquiryTransfer_모호한결과_unknown_호출() {
+        EwaTransfer ewaTransfer = mock(EwaTransfer.class);
+        when(ewaTransfer.getId()).thenReturn(1L);
+        when(ewaTransfer.getMessageNo()).thenReturn("MSG-001");
+        when(wageTransferPort.inquireTransfer("MSG-001"))
+                .thenReturn(new WageTransferResult(null, null, null));
+
+        ewaTransferService.inquiryTransfer(ewaTransfer);
+
+        verify(ewaTransferProcessor).unknownTransfer(1L);
+    }
+
+    @Test
     void receiveInterBankFailure_processor_위임() {
         ewaTransferService.receiveInterBankFailure("TX-001");
         verify(ewaTransferProcessor).receiveInterBankFailure("TX-001");

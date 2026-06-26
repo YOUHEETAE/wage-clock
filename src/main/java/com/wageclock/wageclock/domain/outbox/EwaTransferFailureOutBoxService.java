@@ -38,6 +38,12 @@ public class EwaTransferFailureOutBoxService {
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
         Long transferId = ewaTransfer.getId();
         Worker worker = ewaTransfer.getWorker();
+        if (ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.COMPLETED
+                || ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.FAILED) {
+            event.processed();
+            ewaTransferFailureOutBoxRepository.save(event);
+            return;
+        }
         try{
             WageTransferResult result;
             if(ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.PENDING_INQUIRY

@@ -156,6 +156,25 @@ class InterBankFailureOutBoxEventServiceTest {
     }
 
     @Test
+    void processEvent_모호한결과_unknownItem_retryCount증가() {
+        InterBankFailureOutBoxEvent event = buildEvent();
+        BulkSettlementItem item = buildItem(BulkSettlementItem.BulkSettlementItemStatus.RETRYING);
+        Worker worker = mock(Worker.class);
+        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(workerRepository.findById(1L)).thenReturn(Optional.of(worker));
+        when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-002");
+        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), eq("TX-002")))
+                .thenReturn(new WageTransferResult(null, null, null));
+
+        interBankFailureOutBoxEventService.processEvent(event);
+
+        assertEquals(1, event.getRetryCount());
+        verify(bulkSettlementProcessor).unknownItem(10L);
+        verify(interBankFailureOutBoxEventRepository).save(event);
+        verify(interBankFailureOutBoxEventResultHandler, never()).saveSuccess(any(), any());
+    }
+
+    @Test
     void processEvent_MAX_RETRY_초과_failItem_이벤트_FAILED() {
         InterBankFailureOutBoxEvent event = buildEvent();
         for (int i = 0; i < 4; i++) {

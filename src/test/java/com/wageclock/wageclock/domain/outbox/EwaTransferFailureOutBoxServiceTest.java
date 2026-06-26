@@ -116,6 +116,40 @@ class EwaTransferFailureOutBoxServiceTest {
     }
 
     @Test
+    void processEvent_COMPLETED상태_새이체없이_이벤트종료() {
+        EwaTransferFailureOutBoxEvent event = buildEvent();
+        EwaTransfer transfer = mock(EwaTransfer.class);
+        when(transfer.getId()).thenReturn(1L);
+        when(transfer.getWorker()).thenReturn(mock(Worker.class));
+        when(transfer.getStatus()).thenReturn(EwaTransfer.EwaTransferStatus.COMPLETED);
+        when(ewaTransferRepository.findByIdWithWorker(1L)).thenReturn(Optional.of(transfer));
+
+        ewaTransferFailureOutBoxService.processEvent(event);
+
+        assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PROCESSED, event.getStatus());
+        verify(ewaTransferFailureOutBoxRepository).save(event);
+        verify(wageTransferPort, never()).transfer(any(), any(), any());
+        verify(wageTransferPort, never()).inquireTransfer(any());
+    }
+
+    @Test
+    void processEvent_FAILED상태_새이체없이_이벤트종료() {
+        EwaTransferFailureOutBoxEvent event = buildEvent();
+        EwaTransfer transfer = mock(EwaTransfer.class);
+        when(transfer.getId()).thenReturn(1L);
+        when(transfer.getWorker()).thenReturn(mock(Worker.class));
+        when(transfer.getStatus()).thenReturn(EwaTransfer.EwaTransferStatus.FAILED);
+        when(ewaTransferRepository.findByIdWithWorker(1L)).thenReturn(Optional.of(transfer));
+
+        ewaTransferFailureOutBoxService.processEvent(event);
+
+        assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PROCESSED, event.getStatus());
+        verify(ewaTransferFailureOutBoxRepository).save(event);
+        verify(wageTransferPort, never()).transfer(any(), any(), any());
+        verify(wageTransferPort, never()).inquireTransfer(any());
+    }
+
+    @Test
     void processEvent_MAX_RETRY_초과_이벤트_FAILED_상태() {
         EwaTransferFailureOutBoxEvent event = buildEvent();
         // MAX_RETRY - 1 번 선행 실패 (다음 호출로 MAX_RETRY 도달)

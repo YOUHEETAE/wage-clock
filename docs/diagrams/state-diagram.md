@@ -8,8 +8,8 @@ stateDiagram-v2
 
     PENDING --> REJECTED: 고용주 거절 (rejectEwa)
     PENDING --> APPROVED: EwaTransfer 최초 시도 성공
-    PENDING --> FAILED: EwaTransfer 최초 시도 확정 실패
-    PENDING --> UNKNOWN: EwaTransfer 최초 시도 예외
+    PENDING --> FAILED: EwaTransfer 확정 실패 또는 messageNo 발급 실패
+    PENDING --> UNKNOWN: EwaTransfer transfer() 예외
 
     UNKNOWN --> APPROVED: EwaTransfer가 재조회 끝에 COMPLETED
     UNKNOWN --> FAILED: EwaTransfer가 재조회 끝에 FAILED
@@ -36,7 +36,8 @@ stateDiagram-v2
     PENDING --> COMPLETED: transfer() 성공
     PENDING --> PENDING_INQUIRY: VTIM (처리중 응답)
     PENDING --> FAILED: 확정 실패 (잔액부족 등)
-    PENDING --> UNKNOWN: 예외 (네트워크 오류 등)
+    PENDING --> FAILED: messageNo 발급 실패 — transfer() 미실행, 조회 불가
+    PENDING --> UNKNOWN: transfer() 예외 (messageNo는 저장된 이후)
 
     PENDING_INQUIRY --> COMPLETED: 재조회 성공
     PENDING_INQUIRY --> PENDING_INQUIRY: 재조회해도 여전히 처리중
@@ -72,8 +73,9 @@ stateDiagram-v2
 
     PENDING --> COMPLETED: transfer() 성공
     PENDING --> PENDING_INQUIRY: VTIM
-    PENDING --> FAILED: 확정 실패
-    PENDING --> UNKNOWN: 예외
+    PENDING --> FAILED: 확정 실패 또는 워커 없음
+    PENDING --> UNKNOWN: transfer() 예외 · 타임아웃
+    PENDING --> PENDING: prepareTransfer 실패 (Retryable — 상태 불변, 다음 사이클 재시도)
 
     PENDING_INQUIRY --> COMPLETED: retrySettlement 재조회 성공
     PENDING_INQUIRY --> FAILED: 재조회 결과 확정 실패
@@ -123,3 +125,7 @@ stateDiagram-v2
 
 `COMPLETED → RETRYING` 전이가 없으면, 이미 끝난 것처럼 보이는 세틀먼트의 PayPeriod에 대해
 `createBulkSettlement`의 중복생성 가드가 새 정산을 또 만들 수 있는 구멍이 생긴다 — 이게 이 전이를 추가한 이유다.
+
+`TRANSFER_FAILED → RETRYING`은 **의도적으로 없다** — `receiveInterBankFailure`에서 `settlement.getStatus() == COMPLETED`일 때만
+`retrying()`을 호출하는 가드가 있어서, `TRANSFER_FAILED` 세틀먼트는 타행이체불능 통지를 받아도 상태가 바뀌지 않는다.
+`TRANSFER_FAILED`는 이미 중복생성 가드의 안전 목록에 포함돼 있어 보호가 되기 때문이다.

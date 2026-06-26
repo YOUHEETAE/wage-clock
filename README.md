@@ -200,7 +200,14 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 13: 일괄 정산 (Mock 헥토파이낸셜 펌뱅킹 병렬 처리 + Outbox 재시도)
 ✅ Phase 14: EWA 리팩토링 (PortOne 가상계좌 제거 → 직접 펌뱅킹 이체 + VTIM/UNKNOWN 상태 관리 + RETRYING 분리 + Outbox 재이체)
 ✅ Phase 15: Settlement 리팩토링 (VTIM/UNKNOWN 상태 관리 + RETRYING 분리 + Outbox 재이체)
-⬜ Phase 16: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
+✅ Phase 16: messageNo 사전생성 + RETRYING·UNKNOWN 통합 구조 (EWA·Bulk 공통 패턴으로 추출)
+✅ Phase 17: 네이밍 정리 (도메인 용어 통일 — 메서드·상태·이벤트명 일관성 확보)
+✅ Phase 18: Swagger / OpenAPI 문서화 (springdoc-openapi, 전체 API 엔드포인트 명세)
+✅ Phase 19: BulkSettlement 리팩토링 (이체 결과를 Sealed Interface로 타입 안전하게 분기, prepareTransfer 실패 → Retryable, 타임아웃을 개별 future로 이동, 워커 분류 버그 수정)
+✅ Phase 20: EWA Transfer 리팩토링 (prepareTransfer 실패 → FAILED 분리, inquiryTransfer else절 추가, Outbox terminal state early exit으로 이중송금 방지)
+⬜ Phase 21: Outbox 리팩토링
+⬜ Phase 22: AWS 배포
+⬜ Phase 23: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```
 
 ---
