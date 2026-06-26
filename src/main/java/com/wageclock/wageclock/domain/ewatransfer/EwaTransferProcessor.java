@@ -4,11 +4,11 @@ import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 
-@Service
+@Component
 public class EwaTransferProcessor {
 
     private final EwaTransferRepository ewaTransferRepository;

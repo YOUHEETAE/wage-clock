@@ -10,7 +10,7 @@ import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 // Spring 프록시 self-invocation 우회용 분리 클래스
-@Service
+@Component
 public class BulkSettlementProcessor {
 
     private final PayPeriodRepository payPeriodRepository;

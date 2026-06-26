@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.settlement;
 
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.worker.Worker;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -80,6 +81,10 @@ public class BulkSettlementItem {
 
     public Long getWorkerId(){
         return payPeriod.getWorkerId();
+    }
+
+    public Worker getWorker(){
+        return payPeriod.getEmployment().getWorker();
     }
 
 }
