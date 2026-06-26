@@ -40,9 +40,13 @@ sequenceDiagram
         WageTransferPort-->>EwaTransferService: failureReason
         EwaTransferService->>EwaTransferProcessor: failed(id)
         EwaTransferProcessor->>DB: EwaTransfer FAILED / EwaRequest FAILED
-    else 예외 (네트워크 오류 등)
+    else messageNo 발급 실패 (prepareTransfer/assignMessageNo 예외)
         WageTransferPort--xEwaTransferService: Exception
-        EwaTransferService->>EwaTransferProcessor: unknown(id)
+        EwaTransferService->>EwaTransferProcessor: failTransfer(id)
+        EwaTransferProcessor->>DB: EwaTransfer FAILED / EwaRequest FAILED
+    else transfer() 예외 (네트워크 오류 등, messageNo는 이미 저장됨)
+        WageTransferPort--xEwaTransferService: Exception
+        EwaTransferService->>EwaTransferProcessor: unknownTransfer(id)
         EwaTransferProcessor->>DB: EwaTransfer UNKNOWN / EwaRequest UNKNOWN
     end
 
@@ -107,7 +111,9 @@ sequenceDiagram
 
     loop 30초마다
         OutboxScheduler->>OutboxService: processEvent(event)
-        alt EwaTransfer 상태가 PENDING_INQUIRY/UNKNOWN (이미 한 번 시도함)
+        alt EwaTransfer가 이미 COMPLETED/FAILED (EwaTransferScheduler 등이 먼저 처리)
+            OutboxService->>OutboxService: event.processed() → return (이중송금 방지)
+        else EwaTransfer 상태가 PENDING_INQUIRY/UNKNOWN (이미 한 번 시도함)
             OutboxService->>WageTransferPort: inquireTransfer(기존 messageNo)
         else RETRYING (이번이 첫 재시도)
             OutboxService->>WageTransferPort: prepareTransfer(EWA) → 새 messageNo
@@ -115,8 +121,9 @@ sequenceDiagram
         end
         alt 성공
             OutboxService->>OutboxService: saveSuccess → completeRetry(COMPLETED, addEwaAmount) / event.processed()
-        else 처리중
-            OutboxService->>OutboxService: markPendingInquiry (event는 PENDING 유지, 다음 사이클에 inquire 경로로)
+        else 처리중 (PENDING_INQUIRY)
+            OutboxService->>OutboxService: markPendingInquiry / event.processed()
+            Note over OutboxService: Outbox는 종료 — EwaTransferScheduler가 이후 재조회 담당
         else 확정 실패
             OutboxService->>OutboxService: failRetry / event.failed()
         else 예외 · 애매한 응답
@@ -155,16 +162,15 @@ sequenceDiagram
         Executor->>WageTransferPort: transfer(workerN, amountN, messageNo)
     end
 
-    BulkSettlementService->>BulkSettlementService: CompletableFuture.allOf(...).join()
-
-    loop 결과별 분기
+    loop 결과별 분기 (각 future.join())
         BulkSettlementService->>BulkSettlementProcessor: completeItem / markPendingInquiry / failItem / unknownItem
+        Note over BulkSettlementService: 워커 없음 → Fail / prepareTransfer 실패 → Retryable(no-op) / transfer() 예외·타임아웃 → Unknown
     end
 
     alt 전원 성공
         BulkSettlementService->>BulkSettlementProcessor: completeSettlement → BulkSettlement COMPLETED
     else 일부 미완료
-        BulkSettlementService->>BulkSettlementProcessor: failSettlement → BulkSettlement TRANSFER_FAILED
+        BulkSettlementService->>BulkSettlementProcessor: transferFailSettlement → BulkSettlement TRANSFER_FAILED
     end
 ```
 
@@ -191,7 +197,7 @@ sequenceDiagram
     Listener->>BulkSettlementService: receiveInterBankFailure(messageNo)
     BulkSettlementService->>BulkSettlementProcessor: receiveInterBankFailure(messageNo)
     BulkSettlementProcessor->>BulkSettlementProcessor: findByMessageNo → item.retrying()
-    BulkSettlementProcessor->>BulkSettlementProcessor: item.getBulkSettlement().retrying() (중복 정산 생성 가드 보호)
+    BulkSettlementProcessor->>BulkSettlementProcessor: settlement.getStatus()==COMPLETED 일 때만 retrying() (TRANSFER_FAILED는 그대로 유지)
     BulkSettlementProcessor->>BulkSettlementProcessor: InterBankFailureOutBoxEvent(PENDING, bulkSettlementItemId) 생성
 
     loop 30초마다

@@ -105,6 +105,58 @@ class BulkSettlementServiceTest {
     }
 
     @Test
+    void initiateBulkSettlement_워커없음_failItem_failSettlement() {
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
+                .thenReturn(new BulkSettlementContext(1L, List.of(context)));
+        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of());
+
+        bulkSettlementService.initiateBulkSettlement("BULK-001");
+
+        verify(bulkSettlementProcessor).failItem(10L);
+        verify(bulkSettlementProcessor).transferFailSettlement("BULK-001");
+        verify(wageTransferPort, never()).transfer(any(), any(), any());
+    }
+
+    @Test
+    void initiateBulkSettlement_prepareTransfer실패_Retryable_상태변경없음() {
+        Worker worker = mock(Worker.class);
+        when(worker.getId()).thenReturn(1L);
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
+                .thenReturn(new BulkSettlementContext(1L, List.of(context)));
+        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
+        when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT))
+                .thenThrow(new RuntimeException("Redis 장애"));
+
+        bulkSettlementService.initiateBulkSettlement("BULK-001");
+
+        verify(bulkSettlementProcessor, never()).completeItem(any());
+        verify(bulkSettlementProcessor, never()).failItem(any());
+        verify(bulkSettlementProcessor, never()).unknownItem(any());
+        verify(bulkSettlementProcessor, never()).markPendingInquiry(any());
+        verify(bulkSettlementProcessor).transferFailSettlement("BULK-001");
+    }
+
+    @Test
+    void initiateBulkSettlement_모호한결과_unknownItem_failSettlement() {
+        Worker worker = mock(Worker.class);
+        when(worker.getId()).thenReturn(1L);
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
+                .thenReturn(new BulkSettlementContext(1L, List.of(context)));
+        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
+        when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-001");
+        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), eq("TX-001")))
+                .thenReturn(new WageTransferResult(null, null, null));
+
+        bulkSettlementService.initiateBulkSettlement("BULK-001");
+
+        verify(bulkSettlementProcessor).unknownItem(10L);
+        verify(bulkSettlementProcessor).transferFailSettlement("BULK-001");
+    }
+
+    @Test
     void retrySettlement_PENDING_INQUIRY_성공_completeItem() {
         BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "MSG-001");
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
