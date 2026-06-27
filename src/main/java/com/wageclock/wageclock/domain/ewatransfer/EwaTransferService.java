@@ -62,19 +62,26 @@ public class EwaTransferService {
         ewaTransferProcessor.assignMessageNo(ewaTransferId ,messageNo);
         return messageNo;
     }
+
     private EwaRequest.EwaRequestStatus applyTransferStatus(WageTransferResult result, Long ewaTransferId) {
-        if(result.transferId() != null){
-            ewaTransferProcessor.completeTransfer(ewaTransferId);
-            return EwaRequest.EwaRequestStatus.APPROVED;
-        }else if(result.pendingMessageNo() != null){
-            ewaTransferProcessor.markPendingInquiry(ewaTransferId);
-            return EwaRequest.EwaRequestStatus.PENDING;
-        }else if(result.failureReason() != null){
-            ewaTransferProcessor.failTransfer(ewaTransferId);
-            return EwaRequest.EwaRequestStatus.FAILED;
-            //todo : 확정 실패시 알림 발송 필요
-        }
-        ewaTransferProcessor.unknownTransfer(ewaTransferId);
-        return EwaRequest.EwaRequestStatus.UNKNOWN;
+        return switch (result.classify()) {
+            case SUCCESS -> {
+                ewaTransferProcessor.completeTransfer(ewaTransferId);
+                yield EwaRequest.EwaRequestStatus.APPROVED;
+            }
+            case PENDING_INQUIRY -> {
+                ewaTransferProcessor.markPendingInquiry(ewaTransferId);
+                yield EwaRequest.EwaRequestStatus.PENDING;
+            }
+            case FAILURE -> {
+                ewaTransferProcessor.failTransfer(ewaTransferId);
+                yield EwaRequest.EwaRequestStatus.FAILED;
+                //todo : 확정 실패시 알림 발송 필요
+            }
+            case UNKNOWN -> {
+                ewaTransferProcessor.unknownTransfer(ewaTransferId);
+                yield EwaRequest.EwaRequestStatus.UNKNOWN;
+            }
+        };
     }
 }

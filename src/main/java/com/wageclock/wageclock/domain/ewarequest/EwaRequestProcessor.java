@@ -6,13 +6,13 @@ import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
 // Spring 프록시 self-invocation 우회용 분리 클래스
-@Service
+@Component
 public class EwaRequestProcessor {
 
     private final EwaRequestRepository ewaRequestRepository;

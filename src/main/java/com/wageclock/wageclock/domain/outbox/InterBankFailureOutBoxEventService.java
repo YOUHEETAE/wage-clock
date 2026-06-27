@@ -6,79 +6,73 @@ import com.wageclock.wageclock.domain.port.WageTransferResult;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementItem;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementItemRepository;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementProcessor;
-import com.wageclock.wageclock.domain.worker.Worker;
-import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
+@Slf4j
 public class InterBankFailureOutBoxEventService {
 
     private final WageTransferPort wageTransferPort;
     private final BulkSettlementItemRepository bulkSettlementItemRepository;
-    private final WorkerRepository workerRepository;
-    private final InterBankFailureOutBoxEventResultHandler interBankFailureOutBoxEventResultHandler;
-    private final InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
     private final BulkSettlementProcessor bulkSettlementProcessor;
+    private final InterBankFailureOutBoxProcessor interBankFailureOutBoxProcessor;
 
     public InterBankFailureOutBoxEventService(WageTransferPort wageTransferPort,
                                               BulkSettlementItemRepository bulkSettlementItemRepository,
-                                              WorkerRepository workerRepository,
-                                              InterBankFailureOutBoxEventResultHandler interBankFailureOutBoxEventResultHandler,
-                                              InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository, BulkSettlementProcessor bulkSettlementProcessor) {
+                                              BulkSettlementProcessor bulkSettlementProcessor, InterBankFailureOutBoxProcessor interBankFailureOutBoxProcessor) {
         this.wageTransferPort = wageTransferPort;
         this.bulkSettlementItemRepository = bulkSettlementItemRepository;
-        this.workerRepository = workerRepository;
-        this.interBankFailureOutBoxEventResultHandler = interBankFailureOutBoxEventResultHandler;
-        this.interBankFailureOutBoxEventRepository = interBankFailureOutBoxEventRepository;
         this.bulkSettlementProcessor = bulkSettlementProcessor;
+        this.interBankFailureOutBoxProcessor = interBankFailureOutBoxProcessor;
     }
 
     public void processEvent(InterBankFailureOutBoxEvent event) {
         BulkSettlementItem bulkSettlementItem = bulkSettlementItemRepository.findByIdWithEmployment(event.getBulkSettlementItemId())
                 .orElseThrow(() -> new NotFoundException("BulkSettlementItem Not Found"));
-        Worker worker = workerRepository.findById(bulkSettlementItem.getWorkerId())
-                        .orElseThrow(() -> new NotFoundException("Worker Not Found"));
-        try {
-            WageTransferResult result;
-            BulkSettlementItem.BulkSettlementItemStatus status = bulkSettlementItem.getStatus();
-            if (status == BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY
-                    || status == BulkSettlementItem.BulkSettlementItemStatus.UNKNOWN) {
-                result = wageTransferPort.inquireTransfer(bulkSettlementItem.getMessageNo());
-            } else {
-                String messageNo = wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT);
-                bulkSettlementProcessor.assignMessageNo(bulkSettlementItem.getId(), messageNo);
-                result = wageTransferPort.transfer(worker, bulkSettlementItem.getAmount(), messageNo);
-            }
-            if (result.transferId() != null) {
-                    interBankFailureOutBoxEventResultHandler.saveSuccess(bulkSettlementItem, event);
-                }else  if (result.pendingMessageNo() != null) {
-                    bulkSettlementProcessor.markPendingInquiry(bulkSettlementItem.getId());
-                }else if(result.failureReason() != null) {
-                    bulkSettlementProcessor.failItem(bulkSettlementItem.getId());
-                    event.failed();
-                    interBankFailureOutBoxEventRepository.save(event);
-                    //todo : 확정 실패시 알림 발송 필요
-                }
-                else {
-                    event.incrementRetryCount();
-                    if (event.getStatus() == InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.FAILED) {
-                        bulkSettlementProcessor.failItem(bulkSettlementItem.getId());
-                        //todo : 확정 실패시 알림 발송 필요
-                    } else {
-                        bulkSettlementProcessor.unknownItem(bulkSettlementItem.getId());
-                    }
-                    interBankFailureOutBoxEventRepository.save(event);
-                }
-        } catch (Exception e) {
-            event.incrementRetryCount();
-            if (event.getStatus() == InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.FAILED) {
-                bulkSettlementProcessor.failItem(bulkSettlementItem.getId());
-                //todo : 확정 실패시 알림 발송 필요
-            } else {
-                bulkSettlementProcessor.unknownItem(bulkSettlementItem.getId());
-            }
-            interBankFailureOutBoxEventRepository.save(event);
+
+        BulkSettlementItem.BulkSettlementItemStatus status = bulkSettlementItem.getStatus();
+
+        if (status == BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY
+                || status == BulkSettlementItem.BulkSettlementItemStatus.UNKNOWN) {
+            inquiryTransfer(event, bulkSettlementItem);
+        } else {
+            retryTransfer(event, bulkSettlementItem);
         }
     }
+
+    private String issueMessageNo(BulkSettlementItem bulkSettlementItem) {
+        String messageNo = wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT);
+        bulkSettlementProcessor.assignMessageNo(bulkSettlementItem.getId(), messageNo);
+        return messageNo;
+    }
+    private void retryTransfer(InterBankFailureOutBoxEvent event, BulkSettlementItem bulkSettlementItem) {
+        String messageNo;
+        try{
+            messageNo = issueMessageNo(bulkSettlementItem);
+        }catch (Exception e){
+            log.error("messageNo 발급/저장 실패 bulkSettlementItemId={}", bulkSettlementItem.getId(), e);
+            interBankFailureOutBoxProcessor.handlePrepareRetryOrFail(event, bulkSettlementItem);
+            return;
+        }
+        try{
+            WageTransferResult result = wageTransferPort.transfer(bulkSettlementItem.getWorker(),
+                    bulkSettlementItem.getAmount(), messageNo);
+            interBankFailureOutBoxProcessor.applyResult(result, event, bulkSettlementItem);
+        }catch (Exception e){
+            log.error("이체 처리 실패 bulkSettlementItemId={}", bulkSettlementItem.getId(), e);
+            interBankFailureOutBoxProcessor.handleRetryOrFail(event, bulkSettlementItem);
+        }
+    }
+    private void inquiryTransfer(InterBankFailureOutBoxEvent event, BulkSettlementItem bulkSettlementItem) {
+        try {
+            WageTransferResult result = wageTransferPort.inquireTransfer(bulkSettlementItem.getMessageNo());
+            interBankFailureOutBoxProcessor.applyResult(result, event, bulkSettlementItem);
+        }catch (Exception e){
+            log.error("이체 결과 조회 실패 bulkSettlementItemId={}", bulkSettlementItem.getId(), e);
+            interBankFailureOutBoxProcessor.handleRetryOrFail(event, bulkSettlementItem);
+        }
+    }
+
 }

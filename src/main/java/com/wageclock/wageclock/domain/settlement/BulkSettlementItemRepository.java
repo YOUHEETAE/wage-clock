@@ -24,6 +24,7 @@ public interface BulkSettlementItemRepository extends JpaRepository<BulkSettleme
     @Query("SELECT i FROM BulkSettlementItem i " +
             "JOIN FETCH i.payPeriod pp " +
             "JOIN FETCH pp.employment emp " +
+            "JOIN FETCH emp.worker " +
             "WHERE i.id = :id")
     Optional<BulkSettlementItem> findByIdWithEmployment(Long id);
 
