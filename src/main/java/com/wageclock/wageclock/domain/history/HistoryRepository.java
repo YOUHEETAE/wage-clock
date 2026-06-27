@@ -20,8 +20,9 @@ public class HistoryRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<HistoryEvent> getHistory(Long employmentId) {
+    public List<HistoryEvent> getHistory(Long employmentId, Timestamp cursor, int size) {
         String sql = """
+                SELECT * FROM (
                 SELECT 'PAY_PERIOD_START' AS event_type, period_start::timestamp AS event_time,
                        id AS pay_period_id, period_start, period_end,
                        total_earned_amount, total_ewa_amount, status AS pay_period_status,
@@ -61,7 +62,10 @@ public class HistoryRepository {
                 FROM ewa_requests er
                 JOIN pay_periods pp ON er.pay_period_id = pp.id
                 WHERE pp.employment_id = ?
+                ) events
+                WHERE event_time > COALESCE(?, '-infinity'::timestamp)
                 ORDER BY event_time ASC
+                LIMIT ?
                 """;
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> {
@@ -97,6 +101,6 @@ public class HistoryRepository {
             };
 
             return new HistoryEvent(HistoryEvent.EventType.valueOf(eventType), timestamp, payload);
-        }, employmentId, employmentId, employmentId, employmentId, employmentId);
+        }, employmentId, employmentId, employmentId, employmentId, employmentId, cursor, size);
     }
 }
