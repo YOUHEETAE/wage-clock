@@ -57,9 +57,7 @@ public class WorkSessionService {
             throw new UnauthorizedException("unauthorized");
         }
         workSession.clockOut();
-        workSessionRepository.save(workSession);
         workSession.getPayPeriod().addEarnedAmount(workSession.getEarnedAmount());
-        payPeriodRepository.save(workSession.getPayPeriod());
         return new ClockOutResponse(workSession.getClockOut(), workSession.getEarnedAmount());
     }
     @Transactional
@@ -70,7 +68,6 @@ public class WorkSessionService {
             throw new UnauthorizedException("unauthorized");
         }
         workSession.pause();
-        workSessionRepository.save(workSession);
     }
     @Transactional
     public void resume(Long sessionId, Long workerId){
@@ -80,6 +77,5 @@ public class WorkSessionService {
             throw new UnauthorizedException("unauthorized");
         }
         workSession.resume();
-        workSessionRepository.save(workSession);
     }
 }

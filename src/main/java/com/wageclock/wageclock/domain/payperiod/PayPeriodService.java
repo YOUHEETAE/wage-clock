@@ -39,7 +39,6 @@ public class PayPeriodService {
             throw new IllegalStateException("Paused workSession exists");
         }
         payPeriod.close();
-        payPeriodRepository.save(payPeriod);
         return new ClosePayPeriodResponse(payPeriod.getPeriodStart(), payPeriod.getPeriodEnd(),
                 payPeriod.getTotalEarnedAmount(), payPeriod.getTotalEwaAmount(),
                 payPeriod.getActualPayAmount());

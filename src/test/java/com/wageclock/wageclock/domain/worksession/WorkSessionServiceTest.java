@@ -137,7 +137,6 @@ public class WorkSessionServiceTest {
         workSessionService.clockOut(new ClockOutRequest(1L), 1L);
 
         verify(payPeriod).addEarnedAmount(BigDecimal.valueOf(50000));
-        verify(payPeriodRepository).save(payPeriod);
     }
     @Test
     void pause_정상_처리() {
@@ -147,7 +146,6 @@ public class WorkSessionServiceTest {
         workSessionService.pause(1L, 1L);
 
         verify(savedWorkSession).pause();
-        verify(workSessionRepository).save(savedWorkSession);
     }
 
     @Test
@@ -166,6 +164,5 @@ public class WorkSessionServiceTest {
         workSessionService.resume(1L, 1L);
 
         verify(savedWorkSession).resume();
-        verify(workSessionRepository).save(savedWorkSession);
     }
 }

@@ -25,7 +25,6 @@ public class BulkSettlementOutBoxResultHandler {
                 .orElseThrow(() -> new NotFoundException(portOnePaymentId + " not found"));
         bulkSettlement.updateAccountInfo(account.bank(), account.accountNumber(), account.expiredAt());
         bulkSettlement.processing();
-        bulkSettlementRepository.save(bulkSettlement);
         event.processed();
         bulkSettlementOutBoxEventRepository.save(event);
     }
