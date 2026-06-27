@@ -57,7 +57,6 @@ public class EwaRequestProcessor {
                 .build());
 
         payPeriod.addEwaAmount(ewaRequestDto.requestAmount());
-        payPeriodRepository.save(payPeriod);
 
         return new EwaResponseDto(ewaRequest.getId(),
                 ewaRequest.getRequestedAmount(), ewaRequest.getStatus());

@@ -89,15 +89,14 @@ public class BulkSettlementProcessor {
                 findByPortOnePaymentId(bulkSettlement.getPortOnePaymentId()).
                 orElseThrow(() -> new NotFoundException("BulkSettlementOutBoxEvent not found."));
         bulkSettlementOutBoxEvent.processed();
-        bulkSettlementOutBoxEventRepository.save(bulkSettlementOutBoxEvent);
     }
+
     @Transactional
     public void completeItem(Long itemId) {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         item.completed();
         item.getPayPeriod().close();
-        bulkSettlementItemRepository.save(item);
     }
 
     @Transactional
@@ -105,7 +104,6 @@ public class BulkSettlementProcessor {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         item.markPendingInquiry();
-        bulkSettlementItemRepository.save(item);
     }
 
     @Transactional
@@ -113,7 +111,6 @@ public class BulkSettlementProcessor {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         item.failed();
-        bulkSettlementItemRepository.save(item);
     }
 
     @Transactional
@@ -121,7 +118,6 @@ public class BulkSettlementProcessor {
         BulkSettlementItem bulkSettlementItem = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         bulkSettlementItem.unknown();
-        bulkSettlementItemRepository.save(bulkSettlementItem);
     }
 
     @Transactional
@@ -129,7 +125,6 @@ public class BulkSettlementProcessor {
         BulkSettlementItem bulkSettlementItem =  bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         bulkSettlementItem.assignMessageNo(messageNo);
-        bulkSettlementItemRepository.save(bulkSettlementItem);
     }
 
     @Transactional
@@ -175,22 +170,22 @@ public class BulkSettlementProcessor {
                 .allMatch(item -> item.getStatus() == BulkSettlementItem.BulkSettlementItemStatus.COMPLETED);
         if (!allCompleted) return;
         bulkSettlement.completed();
-        bulkSettlementRepository.save(bulkSettlement);
     }
+
     @Transactional
     public void transferFailSettlement(String portOnePaymentId){
         BulkSettlement bulkSettlement = bulkSettlementRepository.findByPortOnePaymentIdWithLock(portOnePaymentId)
                 .orElseThrow(() -> new NotFoundException("BulkSettlement not found"));
         bulkSettlement.transferFailed();
-        bulkSettlementRepository.save(bulkSettlement);
     }
+
     @Transactional
     public void failPayment(String portOnePaymentId){
         BulkSettlement bulkSettlement = bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
                 .orElseThrow(() -> new NotFoundException(portOnePaymentId + " not found"));
         bulkSettlement.paymentFailed();
-        bulkSettlementRepository.save(bulkSettlement);
     }
+
     @Transactional
     public void receiveInterBankFailure(String messageNo){
         BulkSettlementItem item = bulkSettlementItemRepository.findByMessageNo(messageNo)
@@ -202,7 +197,6 @@ public class BulkSettlementProcessor {
         if (settlement.getStatus() == BulkSettlement.BulkSettlementStatus.COMPLETED) {
             settlement.retrying();
         }
-        bulkSettlementItemRepository.save(item);
         InterBankFailureOutBoxEvent event = InterBankFailureOutBoxEvent.builder()
                 .messageNo(messageNo)
                 .bulkSettlementItemId(item.getId())
@@ -211,6 +205,7 @@ public class BulkSettlementProcessor {
                 .build();
         interBankFailureOutBoxEventRepository.save(event);
     }
+
     @Transactional
     public void completeRetry(Long itemId) {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)

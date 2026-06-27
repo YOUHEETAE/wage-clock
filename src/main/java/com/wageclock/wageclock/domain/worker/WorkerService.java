@@ -21,6 +21,5 @@ public class WorkerService {
         worker.registerAccountInfo(registerAccountInfo.accountNumber(),
                 registerAccountInfo.bankCode(),
                 registerAccountInfo.accountHolder());
-        workerRepository.save(worker);
     }
 }
