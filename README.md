@@ -207,7 +207,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 20: EWA Transfer 리팩토링 (prepareTransfer 실패 → FAILED 분리, inquiryTransfer else절 추가, Outbox terminal state early exit으로 이중송금 방지)
 ✅ Phase 21: Outbox 리팩토링 (try-catch 분리로 issueMessageNo 실패 버그 수정, Processor 패턴으로 @Transactional 경계 분리, classify()로 결과 분기 캡슐화)
 ✅ Phase 22: JPA 더티 체킹 활용 (트랜잭션 내 불필요한 repository.save() 제거)
-⬜ Phase 23: history cursor 기반 조회 구현
+✅ Phase 23: history cursor 기반 조회 구현
 ⬜ Phase 24: AWS 배포
 ⬜ Phase 24: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```

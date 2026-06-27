@@ -34,6 +34,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.web.util.UriComponentsBuilder;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -166,5 +168,65 @@ public class HistoryIntegrationTest {
                 Void.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void size_1로_첫_페이지_조회_hasNext_true_nextCursor_있음() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + workerToken);
+        String url = UriComponentsBuilder.fromPath("/api/histories/" + employmentId)
+                .queryParam("size", 1)
+                .toUriString();
+        ResponseEntity<Map> response = testRestTemplate.exchange(
+                url, HttpMethod.GET, new HttpEntity<>(null, headers), Map.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue((Boolean) response.getBody().get("hasNext"));
+        assertNotNull(response.getBody().get("nextCursor"));
+        List<Map<String, Object>> events = (List<Map<String, Object>>) response.getBody().get("events");
+        assertEquals(1, events.size());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 커서_기반_다음_페이지_조회() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + workerToken);
+
+        String firstUrl = UriComponentsBuilder.fromPath("/api/histories/" + employmentId)
+                .queryParam("size", 1)
+                .toUriString();
+        ResponseEntity<Map> firstResponse = testRestTemplate.exchange(
+                firstUrl, HttpMethod.GET, new HttpEntity<>(null, headers), Map.class);
+        String nextCursor = (String) firstResponse.getBody().get("nextCursor");
+
+        String secondUrl = UriComponentsBuilder.fromPath("/api/histories/" + employmentId)
+                .queryParam("size", 1)
+                .queryParam("after", nextCursor)
+                .toUriString();
+        ResponseEntity<Map> secondResponse = testRestTemplate.exchange(
+                secondUrl, HttpMethod.GET, new HttpEntity<>(null, headers), Map.class);
+
+        assertEquals(HttpStatus.OK, secondResponse.getStatusCode());
+        List<Map<String, Object>> events = (List<Map<String, Object>>) secondResponse.getBody().get("events");
+        assertFalse(events.isEmpty());
+        assertNotEquals("PAY_PERIOD_START", events.get(0).get("eventType"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 전체_사이즈_이상이면_hasNext_false_nextCursor_null() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + workerToken);
+        ResponseEntity<Map> response = testRestTemplate.exchange(
+                "/api/histories/" + employmentId,
+                HttpMethod.GET,
+                new HttpEntity<>(null, headers),
+                Map.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertFalse((Boolean) response.getBody().get("hasNext"));
+        assertNull(response.getBody().get("nextCursor"));
     }
 }
