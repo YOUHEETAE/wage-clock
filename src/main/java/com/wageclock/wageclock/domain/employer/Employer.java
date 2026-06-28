@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.employer;
 
+import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -9,11 +10,11 @@ import lombok.NoArgsConstructor;
 @Table(name = "employers")
 @Getter
 @NoArgsConstructor
-public class Employer {
+public class Employer extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private Long id;
 
     @Column(nullable = false)
     private String name;

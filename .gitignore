@@ -23,9 +23,6 @@
 hs_err_pid*
 replay_pid*
 
-#properties
-application.properties
-
 # IDE
 .idea/
 *.iml
@@ -33,3 +30,14 @@ application.properties
 # Gradle
 .gradle/
 build/
+
+# postman
+.postman/
+postman/
+
+# localProperties
+src/main/resources/application-local.properties
+
+# testProperties
+src/test/resources/application.properties
+
