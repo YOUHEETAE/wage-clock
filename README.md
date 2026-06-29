@@ -3,6 +3,14 @@
 > 시간제 노동자의 분 단위 근태를 기록하고,
 > 적립된 급여를 즉시 선지급할 수 있는 임금 인프라 서비스
 
+![Java](https://img.shields.io/badge/Java_21-ED8B00?style=flat&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot_3.5-6DB33F?style=flat&logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS_EC2-FF9900?style=flat&logo=amazonaws&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
+
 ---
 
 ## 배경
@@ -25,107 +33,52 @@
 
 ## 핵심 기능
 
-```
-출근 → 급여시계 시작 (분 단위 적립)
-퇴근 → 급여 확정
-선지급 요청 → 근무 중/퇴근 후 모두 가능, 적립액의 30% 한도 내에서 즉시 지급
-정산 → PayPeriod close, 실지급 월급 계산 (totalEarnedAmount - totalEwaAmount)
-고용주 대시보드 → 직원별 최신 근무 현황 실시간 조회 (JdbcTemplate DISTINCT ON)
-PayPeriod 요약 → 근로자/고용주 모두 조회 가능, 진행 중 세션 실시간 반영
-고용 이력 타임라인 → PayPeriod/WorkSession/EWA 이벤트를 시간순으로 조회
-일괄 정산 → 고용주 정산 버튼 한 번으로 직원 N명 동시 송금 (Mock 헥토파이낸셜 펌뱅킹)
-```
+| 기능 | 설명 |
+|------|------|
+| 근태 기록 | 출근·퇴근·일시정지·재개, 분 단위 급여 실시간 적립 |
+| 선지급 (EWA) | 적립액의 30% 한도 내에서 즉시 펌뱅킹 이체 |
+| 일괄 정산 | 고용주 버튼 한 번으로 직원 N명 동시 송금 |
+| PayPeriod 정산 | 월 단위 PayPeriod close, 실지급 월급 자동 계산 |
+| 고용 이력 타임라인 | WorkSession·EWA·PayPeriod 이벤트를 커서 기반 조회 |
 
 ---
 
-## 기술적 도전
+## 프로젝트 규모
 
-```
-선지급 중복 요청 방지  → 멱등성 (Idempotency Key)
-동시 선지급 요청 제어  → 분산 락 (Redisson) + Pessimistic Lock (DB 레벨)
-EWA 직접 펌뱅킹        → 고용주 승인 즉시 펌뱅킹 이체, VTIM/UNKNOWN 상태 관리
-                          Scheduler가 주기적으로 미결 이체 재조회 후 상태 반영
-EWA 재이체 (Outbox)    → 타행이체불능 수신 시 EwaTransferFailureOutBoxEvent 생성
-                          Scheduler가 자동 재이체 후 결과에 따라 상태 전이
-가상계좌 결제 연동     → PortOne V2 REST API (일괄 정산 전용 - 가상계좌 발급 + 웹훅 수신)
-PG사 교체 가능 구조    → VirtualAccountPort / WageTransferPort 인터페이스 분리 (Hexagonal Architecture)
-외부 API 트랜잭션 분리 → DB 커넥션 풀 고갈 방지를 위해 외부 API 호출과 @Transactional 분리
-                          Processor 내부에서 엔티티 재조회로 detached 엔티티 문제 해결
-장애복구 (Outbox 패턴) → 펌뱅킹 이체 실패 시 Scheduler 기반 자동 재시도
-                          (Kafka Consumer로 교체 가능한 구조로 설계)
-일괄 정산 병렬 처리    → CompletableFuture + ExecutorService로 직원 N명 동시 이체
-                          이체 결과를 Sealed Interface로 타입 안전하게 분기 처리
-타행이체불능 재시도    → 펌뱅킹 실패 통보 수신 시 Outbox 패턴으로 자동 재이체
-```
+| 항목 | 수치                        |
+|------|---------------------------|
+| API 엔드포인트 | 21개                       |
+| JPA 엔티티 | 12개                       |
+| 테스트 케이스 | 205개 (단위 + 통합, 35개 파일)    |
+| 테스트 커버리지 | 81% (Line) / 75% (Branch) |
 
 ---
 
-## 결제 플로우
+## 아키텍처
+
+### 레이어 구조
 
 ```
-근로자 EWA 요청 (특정 금액)
-  → 선지급 가능 금액 검증 (적립액 × 30% 한도 내)
-  → PENDING 상태로 요청 저장
-  → 고용주 승인 (initiateEwa)
-  → EwaTransfer 생성 후 직접 펌뱅킹 이체
-       ├─ 성공 (transferId 수신)   → EwaRequest APPROVED, EwaTransfer COMPLETED
-       ├─ VTIM (pendingMessageNo)   → EwaTransfer PENDING_INQUIRY, Scheduler가 주기적으로 재조회
-       ├─ 확정 실패 (failureReason) → EwaTransfer FAILED (잔액부족 등, 재시도 없음 / 운영팀 수동 처리)
-       └─ 예외 (네트워크 오류 등)   → EwaTransfer UNKNOWN, Scheduler가 재조회
-
-타행이체불능 수신 시 (전문번호 3000)
-  → EwaTransfer RETRYING, EwaRequest APPROVED 유지 (승인 사실 불변)
-  → PayPeriod.totalEwaAmount 즉시 환원 (선지급 한도 복구)
-  → EwaTransferFailureOutBoxEvent 생성
-  → Scheduler가 재이체
-       ├─ 성공   → EwaTransfer COMPLETED, PayPeriod.totalEwaAmount 재차감
-       ├─ VTIM   → EwaTransfer PENDING_INQUIRY, OutBoxEvent PROCESSED
-       ├─ 확정실패 → EwaTransfer FAILED (운영팀 수동 처리)
-       └─ MAX_RETRY 초과 → OutBoxEvent FAILED, EwaTransfer UNKNOWN (운영팀 알림 TODO)
+Controller
+    ↓
+Service          ← 분산 락, 흐름 조율
+    ↓
+Processor        ← @Transactional DB 상태 전이
+    ↓
+Port (Interface) ← 외부 API 추상화
+    ↓
+Adapter          ← PortOne / 헥토파이낸셜 구현체
+    ↓
+Repository
+    ↓
+postgreSQL
 ```
 
----
+> Service는 외부 I/O와 흐름 조율만 담당하고, DB 상태 전이는 Processor가 담당한다.
+이를 통해 Spring Proxy 기반 @Transactional의 self-invocation 문제를 피하고,
+트랜잭션 경계를 명확히 분리했다.
 
-## 정산 플로우
-
-```
-고용주 정산 요청
-  → ACTIVE PayPeriod 조회
-  → WORKING / PAUSED 세션 존재 시 정산 불가
-  → PayPeriod CLOSED (periodEnd = 정산일)
-  → 실지급 월급 계산 (totalEarnedAmount - totalEwaAmount)
-  → 새 PayPeriod 자동 생성 (다음 사이클 시작)
-```
-
----
-
-## 일괄 정산 플로우
-
-```
-고용주 일괄 정산 요청 (직원 N명 선택)
-  → ACTIVE PayPeriod N개 조회 (비관적 락)
-  → 중복 정산 방지 체크
-  → BulkSettlement 생성 → PortOne 가상계좌 발급 (Outbox 패턴으로 장애복구)
-  → 고용주 가상계좌 입금
-  → PortOne 웹훅 수신 (Transaction.Paid)
-  → CompletableFuture로 N명 동시 펌뱅킹 이체
-       ├─ 성공 → transferId 저장, PayPeriod CLOSED
-       ├─ VTIM (응답 지연) → pendingMessageNo 저장, 이후 재조회
-       └─ 실패 → Outbox 패턴으로 자동 재이체
-  → 전원 성공 시 BulkSettlement COMPLETED
-  → 일부 실패 시 TRANSFER_FAILED → Scheduler가 주기적으로 재시도
-
-타행이체불능 수신 시 (전문번호 3000)
-  → 해당 아이템 FAILED 처리
-  → InterBankFailureOutBoxEvent 생성
-  → Scheduler가 재이체 후 성공 시 COMPLETED
-```
-
-> 더 자세한 시퀀스/상태 다이어그램: [시퀀스 다이어그램](docs/diagrams/sequence-diagram.md) · [상태전이 다이어그램](docs/diagrams/state-diagram.md)
-
----
-
-## 도메인 모델
+### 도메인 모델
 
 ```
 Employer (고용주)
@@ -137,11 +90,55 @@ Employer (고용주)
                       └─ EwaTransferFailureOutBoxEvent (재이체 Outbox)
 ```
 
-## ERD
+### ERD
 
 ![ERD](docs/images/erd.png)
 
-### 비즈니스 규칙
+---
+
+## 기술적 도전
+
+### 동시성
+
+- **Idempotency Key**: 네트워크 재시도로 인한 중복 요청 방지
+- **Redisson 분산 락**: 동일 워커의 동시 선지급 요청을 서버 인스턴스 간에 차단
+- **DB 비관적 락**: EWA 요청과 BulkSettlement 정산 간 PayPeriod 동시 수정 방지
+
+### 외부 API
+
+- **PortOne V2**: 일괄 정산용 가상계좌 발급 + 웹훅 수신
+- **Mock 헥토파이낸셜 펌뱅킹**: EWA 직접 이체 + 일괄 정산 이체
+- **외부 API와 트랜잭션 분리**: DB 커넥션 점유 방지를 위해 외부 API 호출과 @Transactional 분리
+
+### 장애복구
+
+- **Outbox 패턴**: 펌뱅킹 이체 실패 시 Scheduler 기반 자동 재시도
+- **전문번호 사전생성**: 송금 전 messageNo를 DB에 저장해 네트워크 예외 시에도 이중 송금 방지
+- **RETRYING / UNKNOWN 상태 분리**: 타행이체불능(재시도 가능)과 결과 불명확(조회 필요)을 명시적으로 구분
+
+### 성능
+
+- **커서 기반 페이징**: UNION ALL 구조에서 Offset 대신 timestamp 커서로 히스토리 조회
+- **CompletableFuture 병렬 처리**: 일괄 정산 시 직원 N명 동시 펌뱅킹 이체
+- **Sealed Interface**: 이체 결과를 타입 안전하게 분기, I/O와 DB 상태변화를 스레드 경계에서 분리
+
+### 아키텍처
+
+- **Hexagonal Architecture**: VirtualAccountPort / WageTransferPort 인터페이스로 PG사 교체 가능
+- **Processor 패턴**: 분산 락 내부 self-call 문제 해결, @Transactional 경계 명확화
+
+---
+
+## 플로우
+
+자세한 흐름은 다이어그램을 참고한다.
+
+- [시퀀스 다이어그램](docs/diagrams/sequence-diagram.md)
+- [상태전이 다이어그램](docs/diagrams/state-diagram.md)
+
+---
+
+## 도메인 규칙
 
 ```
 선지급 한도:     (PayPeriod 적립액 + PAUSED 세션 적립액) × 30%
@@ -175,14 +172,27 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **ORM** | Spring Data JPA (Hibernate) |
 | **인증** | JWT |
 | **결제** | PortOne V2 (가상계좌 실연동) + Mock 송금 |
-| **분산 락** | Redis (Redisson) |  
+| **분산 락** | Redis (Redisson) |
 | **인프라** | Docker, docker-compose, AWS EC2, Nginx |
 | **CI/CD** | GitHub Actions (CI: 테스트/빌드, CD: GHCR 푸시 + EC2 자동 배포) |
 | **빌드** | Gradle |
 
 ---
 
-## 로드맵
+## 주요 개발 히스토리
+
+- JWT 인증 + 근무 세션 및 급여 계산
+- EWA 선지급 API (멱등성 키 + 분산 락)
+- PortOne 가상계좌 연동 + Outbox 기반 장애 복구
+- EWA 직접 펌뱅킹 전환 (즉시성 확보)
+- Bulk Settlement (CompletableFuture 병렬 처리 + Outbox 재시도)
+- messageNo 사전생성 + RETRYING/UNKNOWN 상태 통합
+- Processor 패턴 + classify() 리팩토링
+- 커서 기반 히스토리 페이징
+- AWS EC2 배포 + GitHub Actions CD + Nginx
+
+<details>
+<summary>전체 로드맵 보기</summary>
 
 ```
 ✅ Phase 1: 프로젝트 세팅 (Spring Boot + PostgreSQL + JWT)
@@ -214,6 +224,8 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ⬜ Phase 26: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```
 
+</details>
+
 ---
 
 ## 수익 모델
@@ -226,28 +238,6 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 
 ---
 
-## 고도화 방향
-
-```
-일괄 정산 (펌뱅킹)
-  고용주 정산 버튼 한 번 → 직원 N명 실지급 월급 동시 송금
-  각 직원별 (totalEarnedAmount - totalEwaAmount) 계산 → 펌뱅킹 API 병렬 처리
-  실패 건만 Outbox 패턴으로 자동 재시도
-
-정산 명세서
-  날짜별 근무 시간 (clockIn / clockOut / pause 이력)
-  EWA 선지급 내역 + 거절/실패 사유
-  최종 실지급 금액 산출 근거
-  → 근로자 / 고용주 양측이 같은 데이터를 보는 구조로 급여 분쟁 방지
-
-EWA 방식 피벗
-  선지급이 법적으로 제한될 경우 EwaPort 인터페이스 교체로
-  급여 담보 대출 방식으로 전환 가능
-  근태 기록 + 정산 명세서 코어는 EWA 없이도 독립 서비스로 동작
-```
-
----
-
 ## 브랜치 전략
 
 ```
@@ -255,3 +245,9 @@ main    → 배포 가능한 최종 브랜치 (push 시 CD 자동 실행)
 dev     → 통합 검증 브랜치 (feature 머지 후 검증, 완료 시 main으로)
 feature → 기능 단위 개발 브랜치 (feature/xxx → dev PR)
 ```
+
+---
+
+## 라이센스
+
+MIT License

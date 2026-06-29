@@ -3,6 +3,14 @@ name: CD
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'nginx/**'
+      - '.github/workflows/cd.yml'
 
 jobs:
   build-and-push:
