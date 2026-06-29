@@ -46,13 +46,13 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: mkdir -p /home/${{ secrets.EC2_USERNAME }}/wageclock
 
-      - name: Copy docker-compose.yml to EC2
+      - name: Copy files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml"
+          source: "docker-compose.yml,nginx/"
           target: "/home/${{ secrets.EC2_USERNAME }}/wageclock"
 
       - name: Deploy to EC2
