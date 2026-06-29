@@ -176,7 +176,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **인증** | JWT |
 | **결제** | PortOne V2 (가상계좌 실연동) + Mock 송금 |
 | **분산 락** | Redis (Redisson) |  
-| **인프라** | Docker, docker-compose, AWS EC2 |
+| **인프라** | Docker, docker-compose, AWS EC2, Nginx |
 | **CI/CD** | GitHub Actions (CI: 테스트/빌드, CD: GHCR 푸시 + EC2 자동 배포) |
 | **빌드** | Gradle |
 
@@ -209,8 +209,9 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 21: Outbox 리팩토링 (try-catch 분리로 issueMessageNo 실패 버그 수정, Processor 패턴으로 @Transactional 경계 분리, classify()로 결과 분기 캡슐화)
 ✅ Phase 22: JPA 더티 체킹 활용 (트랜잭션 내 불필요한 repository.save() 제거)
 ✅ Phase 23: history cursor 기반 조회 구현
-⬜ Phase 24: AWS EC2 배포 (docker-compose, GitHub Actions CD, GHCR)
-⬜ Phase 25: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
+✅ Phase 24: AWS EC2 배포 (docker-compose, GitHub Actions CD, GHCR)
+✅ Phase 25: Nginx 리버스 프록시 (80포트, 스프링 앱 외부 직접 노출 제거)
+⬜ Phase 26: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```
 
 ---
