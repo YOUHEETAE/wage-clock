@@ -91,13 +91,13 @@ public class StatementIntegrationTest {
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
 
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER), LoginResponse.class)
+                        new LoginRequest("employer@test.com", "password"), LoginResponse.class)
                 .getBody().token();
         employerToken2 = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("employer2@test.com", "password", UserRole.EMPLOYER), LoginResponse.class)
+                        new LoginRequest("employer2@test.com", "password"), LoginResponse.class)
                 .getBody().token();
         String workerToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("worker@test.com", "password", UserRole.WORKER), LoginResponse.class)
+                        new LoginRequest("worker@test.com", "password"), LoginResponse.class)
                 .getBody().token();
 
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
