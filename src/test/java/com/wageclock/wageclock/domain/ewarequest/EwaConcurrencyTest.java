@@ -103,9 +103,9 @@ public class EwaConcurrencyTest {
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
 
         ResponseEntity<LoginResponse> employerResponse = restTemplate.postForEntity(base + "/api/auth/login",
-                new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER), LoginResponse.class);
+                new LoginRequest("employer@test.com", "password"), LoginResponse.class);
         ResponseEntity<LoginResponse> workerResponse = restTemplate.postForEntity(base + "/api/auth/login",
-                new LoginRequest("worker@test.com", "password", UserRole.WORKER), LoginResponse.class);
+                new LoginRequest("worker@test.com", "password"), LoginResponse.class);
 
         String employerToken = employerResponse.getBody().token();
         workerToken = workerResponse.getBody().token();

@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -37,25 +38,29 @@ public class AuthService {
         String name;
         String encodedPassword;
         Long id;
-        String token;
-        if(loginRequest.role() == UserRole.EMPLOYER){
-            Employer employer = employerRepository.findByEmail(loginRequest.email())
-                    .orElseThrow(() -> new NotFoundException("employer not found"));
+        UserRole role;
+
+        Optional<Employer> employerOpt = employerRepository.findByEmail(loginRequest.email());
+        if (employerOpt.isPresent()) {
+            Employer employer = employerOpt.get();
             encodedPassword = employer.getPassword();
             id = employer.getId();
             name = employer.getName();
+            role = UserRole.EMPLOYER;
         } else {
             Worker worker = workerRepository.findByEmail(loginRequest.email())
-                    .orElseThrow(() -> new NotFoundException("worker not found"));
+                    .orElseThrow(() -> new NotFoundException("user not found"));
             encodedPassword = worker.getPassword();
             id = worker.getId();
             name = worker.getName();
+            role = UserRole.WORKER;
         }
+
         if (!bCryptPasswordEncoder.matches(loginRequest.password(), encodedPassword)) {
             throw new UnauthorizedException("invalid password");
         }
-        token = jwtProvider.generateToken(id, loginRequest.role());
-        return new LoginResponse(name, loginRequest.email(), loginRequest.role(), token);
+        String token = jwtProvider.generateToken(id, role);
+        return new LoginResponse(name, loginRequest.email(), role, token);
     }
 
     public void logout(String token) {
@@ -64,7 +69,7 @@ public class AuthService {
     }
 
     public void signup(SignupRequest signupRequest) {
-        if(employerRepository.existsByEmail(signupRequest.email())) {
+        if(employerRepository.existsByEmail(signupRequest.email()) || workerRepository.existsByEmail(signupRequest.email())) {
             throw new DuplicateException("email already exists");
         }
         if(signupRequest.role() == UserRole.EMPLOYER){

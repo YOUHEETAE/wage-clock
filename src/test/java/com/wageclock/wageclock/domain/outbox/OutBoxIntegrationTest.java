@@ -98,10 +98,10 @@ public class OutBoxIntegrationTest {
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER),
                 Void.class);
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
-                new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER)
+                new LoginRequest("employer@test.com", "password")
                 , LoginResponse.class).getBody().token();
         workerToken = testRestTemplate.postForEntity("/api/auth/login",
-                new LoginRequest("worker@test.com", "password", UserRole.WORKER)
+                new LoginRequest("worker@test.com", "password")
                 , LoginResponse.class).getBody().token();
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
 

@@ -100,10 +100,10 @@ public class PayPeriodIntegrationTest {
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
 
         employerToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER), LoginResponse.class)
+                        new LoginRequest("employer@test.com", "password"), LoginResponse.class)
                 .getBody().token();
         workerToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("worker@test.com", "password", UserRole.WORKER), LoginResponse.class)
+                        new LoginRequest("worker@test.com", "password"), LoginResponse.class)
                 .getBody().token();
 
         Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
@@ -224,7 +224,7 @@ public class PayPeriodIntegrationTest {
         testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("다른워커", "other@test.com", "password", UserRole.WORKER), Void.class);
         String otherToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("other@test.com", "password", UserRole.WORKER), LoginResponse.class)
+                        new LoginRequest("other@test.com", "password"), LoginResponse.class)
                 .getBody().token();
         HttpHeaders otherHeaders = new HttpHeaders();
         otherHeaders.set("Authorization", "Bearer " + otherToken);

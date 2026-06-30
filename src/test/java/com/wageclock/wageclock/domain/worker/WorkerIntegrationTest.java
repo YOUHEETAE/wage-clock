@@ -58,7 +58,7 @@ public class WorkerIntegrationTest {
         testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
         workerToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("worker@test.com", "password", UserRole.WORKER), LoginResponse.class)
+                        new LoginRequest("worker@test.com", "password"), LoginResponse.class)
                 .getBody().token();
     }
 
