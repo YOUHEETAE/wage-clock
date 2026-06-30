@@ -59,7 +59,7 @@ public class AuthIntegrationTest {
     @BeforeEach
     void setUp(){
         signupRequest = new SignupRequest("홍길동", "test@test.com", "password", UserRole.EMPLOYER);
-        loginRequest = new LoginRequest("test@test.com", "password", UserRole.EMPLOYER);
+        loginRequest = new LoginRequest("test@test.com", "password");
         testRestTemplate.postForEntity("/api/auth/sign-up", signupRequest, void.class);
         ResponseEntity<LoginResponse> response = testRestTemplate.postForEntity("/api/auth/login",loginRequest, LoginResponse.class);
         Assertions.assertNotNull(response.getBody());
@@ -88,13 +88,13 @@ public class AuthIntegrationTest {
     }
     @Test
     void 이메일_없을_시_예외(){
-        loginRequest = new LoginRequest("wrongEmail",  "password", UserRole.EMPLOYER);
+        loginRequest = new LoginRequest("wrongEmail",  "password");
         ResponseEntity<LoginResponse> response = testRestTemplate.postForEntity("/api/auth/login", loginRequest, LoginResponse.class);
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
     @Test
     void 비밀번호_불일치_시_예외(){
-        loginRequest = new LoginRequest("test@test.com",  "wrongPassword", UserRole.EMPLOYER);
+        loginRequest = new LoginRequest("test@test.com",  "wrongPassword");
         ResponseEntity<LoginResponse> response = testRestTemplate.postForEntity("/api/auth/login", loginRequest, LoginResponse.class);
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }

@@ -79,8 +79,8 @@ public class WorkSessionIntegrationTest {
     void setUp() {
         SignupRequest signupEmployerRequest = new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER);
         SignupRequest signupWorkerRequest = new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER);
-        LoginRequest loginEmployerRequest = new LoginRequest("employer@test.com", "password", UserRole.EMPLOYER);
-        LoginRequest loginWorkerRequest = new LoginRequest("worker@test.com", "password", UserRole.WORKER);
+        LoginRequest loginEmployerRequest = new LoginRequest("employer@test.com", "password");
+        LoginRequest loginWorkerRequest = new LoginRequest("worker@test.com", "password");
 
         testRestTemplate.postForEntity("/api/auth/sign-up", signupEmployerRequest, Void.class);
         testRestTemplate.postForEntity("/api/auth/sign-up", signupWorkerRequest, Void.class);

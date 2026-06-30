@@ -61,13 +61,14 @@ public class AuthServiceTest {
     @Test
     void 존재하지_않는_이메일_로그인(){
         when(employerRepository.findByEmail(anyString())).thenReturn(Optional.empty());
-        LoginRequest loginRequest = new LoginRequest("other@test.com", "password", UserRole.EMPLOYER);
+        when(workerRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+        LoginRequest loginRequest = new LoginRequest("other@test.com", "password");
         assertThrows(NotFoundException.class, () -> authService.login(loginRequest));
     }
     @Test
     void 존재하지_않는_비밀번호_로그인(){
         when(employerRepository.findByEmail(anyString())).thenReturn(Optional.of(employer));
-        LoginRequest loginRequest = new LoginRequest("test@test.com", "wrongPassword", UserRole.EMPLOYER);
+        LoginRequest loginRequest = new LoginRequest("test@test.com", "wrongPassword");
         assertThrows(UnauthorizedException.class, () -> authService.login(loginRequest));
     }
 
@@ -76,7 +77,7 @@ public class AuthServiceTest {
         when(employerRepository.findByEmail("test@test.com")).thenReturn(Optional.of(employer));
         when(jwtProvider.generateToken(any(), any())).thenReturn("token");
         when(bCryptPasswordEncoder.matches("password","password")).thenReturn(true);
-        LoginRequest loginRequest = new LoginRequest("test@test.com", "password", UserRole.EMPLOYER);
+        LoginRequest loginRequest = new LoginRequest("test@test.com", "password");
         LoginResponse loginResponse = new LoginResponse("홍길동", "test@test.com", UserRole.EMPLOYER, "token");
         assertEquals(loginResponse, authService.login(loginRequest));
     }
@@ -97,11 +98,18 @@ public class AuthServiceTest {
         verify(workerRepository).save(any());
     }
     @Test
-    void 중복_이메일_회원가입_시_예외(){
+    void 중복_이메일_회원가입_시_예외_employer_테이블_충돌(){
         when(employerRepository.existsByEmail(anyString())).thenReturn(true);
-        SignupRequest signupEmployerRequest = new SignupRequest("홍길동", "test@test.com",
-                "password", UserRole.EMPLOYER);
-        assertThrows(DuplicateException.class, () -> authService.signup(signupEmployerRequest));
+        SignupRequest signupRequest = new SignupRequest("홍길동", "test@test.com", "password", UserRole.WORKER);
+        assertThrows(DuplicateException.class, () -> authService.signup(signupRequest));
+    }
+
+    @Test
+    void 중복_이메일_회원가입_시_예외_worker_테이블_충돌(){
+        when(employerRepository.existsByEmail(anyString())).thenReturn(false);
+        when(workerRepository.existsByEmail(anyString())).thenReturn(true);
+        SignupRequest signupRequest = new SignupRequest("홍길동", "test@test.com", "password", UserRole.EMPLOYER);
+        assertThrows(DuplicateException.class, () -> authService.signup(signupRequest));
     }
     @Test
     void 정상_로그아웃_검증(){
