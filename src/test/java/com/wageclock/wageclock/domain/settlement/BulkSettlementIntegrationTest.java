@@ -101,7 +101,7 @@ public class BulkSettlementIntegrationTest {
         HttpHeaders employerHeaders = employerHeaders();
         ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders),
                 EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
 
@@ -151,7 +151,7 @@ public class BulkSettlementIntegrationTest {
 
         Long employmentId2 = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000)), employerHeaders()),
+                new HttpEntity<>(new EmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000), "테스트 사업장2"), employerHeaders()),
                 EmploymentResponse.class).getBody().employmentId();
 
         Long sessionId2 = testRestTemplate.postForEntity(

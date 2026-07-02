@@ -104,7 +104,7 @@ public class HistoryIntegrationTest {
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<EmploymentResponse> empResponse = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(10000)), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "테스트 사업장"), employerHeaders),
                 EmploymentResponse.class);
         employmentId = empResponse.getBody().employmentId();
 
