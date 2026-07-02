@@ -48,4 +48,11 @@ public class EmploymentService {
                 .map(e -> new EmploymentResponse(e.getId(), e.getHourlyWage(), e.getEmploymentName()))
                 .toList();
     }
+
+    @Transactional(readOnly = true)
+    public List<EmploymentResponse> getEmployerEmployments(Long employerId) {
+        return employmentRepository.findByEmployer_Id(employerId).stream()
+                .map(e -> new EmploymentResponse(e.getId(), e.getHourlyWage(), e.getEmploymentName()))
+                .toList();
+    }
 }

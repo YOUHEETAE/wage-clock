@@ -14,4 +14,6 @@ public interface EmploymentRepository extends JpaRepository<Employment,Long> {
     boolean existsByEmployerIdAndWorkerId(@Param("employerId") Long employerId, @Param("workerId") Long workerId);
 
     List<Employment> findByWorker_Id(Long workerId);
+
+    List<Employment> findByEmployer_Id(Long employerId);
 }
