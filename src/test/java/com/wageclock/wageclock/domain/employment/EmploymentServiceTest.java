@@ -101,7 +101,7 @@ public class EmploymentServiceTest {
         when(e2.getEmploymentName()).thenReturn("맥도날드 서초점");
         when(employmentRepository.findByWorker_Id(1L)).thenReturn(List.of(e1, e2));
 
-        List<EmploymentResponse> result = employmentService.getMyEmployments(1L);
+        List<EmploymentResponse> result = employmentService.getWorkerEmployments(1L);
 
         assertEquals(2, result.size());
         assertEquals(1L, result.get(0).employmentId());
@@ -114,7 +114,7 @@ public class EmploymentServiceTest {
     void 고용_없으면_빈_목록_반환() {
         when(employmentRepository.findByWorker_Id(1L)).thenReturn(List.of());
 
-        List<EmploymentResponse> result = employmentService.getMyEmployments(1L);
+        List<EmploymentResponse> result = employmentService.getWorkerEmployments(1L);
 
         assertEquals(0, result.size());
     }

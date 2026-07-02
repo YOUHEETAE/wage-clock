@@ -43,7 +43,7 @@ public class EmploymentService {
     }
 
     @Transactional(readOnly = true)
-    public List<EmploymentResponse> getMyEmployments(Long workerId) {
+    public List<EmploymentResponse> getWorkerEmployments(Long workerId) {
         return employmentRepository.findByWorker_Id(workerId).stream()
                 .map(e -> new EmploymentResponse(e.getId(), e.getHourlyWage(), e.getEmploymentName()))
                 .toList();
