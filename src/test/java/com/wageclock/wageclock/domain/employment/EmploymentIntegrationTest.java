@@ -145,4 +145,39 @@ public class EmploymentIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(0, response.getBody().length);
     }
+
+    @Test
+    void 고용주_고용_목록_조회() {
+        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
+        HttpHeaders employerHeaders = new HttpHeaders();
+        employerHeaders.set("Authorization", "Bearer " + employerToken);
+        testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, employerHeaders), EmploymentResponse.class);
+
+        ResponseEntity<EmploymentResponse[]> response = testRestTemplate.exchange(
+                "/api/employments/employer", HttpMethod.GET, new HttpEntity<>(employerHeaders), EmploymentResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(1, response.getBody().length);
+        assertEquals("스타벅스 강남점", response.getBody()[0].employmentName());
+    }
+
+    @Test
+    void 근로자가_고용주_엔드포인트_호출_시_예외() {
+        HttpHeaders workerHeaders = new HttpHeaders();
+        workerHeaders.set("Authorization", "Bearer " + workerToken);
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                "/api/employments/employer", HttpMethod.GET, new HttpEntity<>(workerHeaders), Void.class);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+
+    @Test
+    void 고용주가_근로자_엔드포인트_호출_시_예외() {
+        HttpHeaders employerHeaders = new HttpHeaders();
+        employerHeaders.set("Authorization", "Bearer " + employerToken);
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                "/api/employments/my", HttpMethod.GET, new HttpEntity<>(employerHeaders), Void.class);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
 }

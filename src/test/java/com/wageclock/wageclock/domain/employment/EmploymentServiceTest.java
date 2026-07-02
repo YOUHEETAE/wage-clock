@@ -118,4 +118,32 @@ public class EmploymentServiceTest {
 
         assertEquals(0, result.size());
     }
+
+    @Test
+    void 고용주_고용_목록_반환() {
+        Employment e1 = mock(Employment.class);
+        Employment e2 = mock(Employment.class);
+        when(e1.getId()).thenReturn(1L);
+        when(e1.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
+        when(e1.getEmploymentName()).thenReturn("스타벅스 강남점");
+        when(e2.getId()).thenReturn(2L);
+        when(e2.getHourlyWage()).thenReturn(BigDecimal.valueOf(12000));
+        when(e2.getEmploymentName()).thenReturn("롯데리아 서초점");
+        when(employmentRepository.findByEmployer_Id(1L)).thenReturn(List.of(e1, e2));
+
+        List<EmploymentResponse> result = employmentService.getEmployerEmployments(1L);
+
+        assertEquals(2, result.size());
+        assertEquals("스타벅스 강남점", result.get(0).employmentName());
+        assertEquals("롯데리아 서초점", result.get(1).employmentName());
+    }
+
+    @Test
+    void 고용주_고용_없으면_빈_목록_반환() {
+        when(employmentRepository.findByEmployer_Id(1L)).thenReturn(List.of());
+
+        List<EmploymentResponse> result = employmentService.getEmployerEmployments(1L);
+
+        assertEquals(0, result.size());
+    }
 }

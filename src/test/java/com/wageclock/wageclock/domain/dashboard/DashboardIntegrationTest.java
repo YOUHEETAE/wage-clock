@@ -156,27 +156,48 @@ public class DashboardIntegrationTest {
     }
 
     @Test
-    void 직원_두명_대시보드_조회() {
-        ResponseEntity<DashboardResponse[]> response = testRestTemplate.exchange(
-                "/api/dashboards",
+    void 사업장별_대시보드_조회() {
+        ResponseEntity<DashboardResponse> response1 = testRestTemplate.exchange(
+                "/api/dashboards/" + employmentId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, employerHeaders()),
-                DashboardResponse[].class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(2, response.getBody().length);
+                DashboardResponse.class);
+        ResponseEntity<DashboardResponse> response2 = testRestTemplate.exchange(
+                "/api/dashboards/" + employmentId2,
+                HttpMethod.GET,
+                new HttpEntity<>(null, employerHeaders()),
+                DashboardResponse.class);
+        assertEquals(HttpStatus.OK, response1.getStatusCode());
+        assertEquals(HttpStatus.OK, response2.getStatusCode());
+        assertEquals(employmentId, response1.getBody().employmentId());
+        assertEquals(employmentId2, response2.getBody().employmentId());
     }
 
     @Test
     void COMPLETED_세션_대시보드_조회() {
-        ResponseEntity<DashboardResponse[]> response = testRestTemplate.exchange(
-                "/api/dashboards",
+        ResponseEntity<DashboardResponse> response = testRestTemplate.exchange(
+                "/api/dashboards/" + employmentId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, employerHeaders()),
-                DashboardResponse[].class);
+                DashboardResponse.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        boolean hasCompleted = java.util.Arrays.stream(response.getBody())
-                .anyMatch(r -> r.status() != null &&
-                        r.status().name().equals("COMPLETED"));
-        assertTrue(hasCompleted);
+        assertEquals("COMPLETED", response.getBody().status().name());
+    }
+
+    @Test
+    void 다른_고용주_대시보드_접근_시_예외() {
+        testRestTemplate.postForEntity("/api/auth/sign-up",
+                new SignupRequest("다른사장", "other@test.com", "password", UserRole.EMPLOYER), Void.class);
+        String otherToken = testRestTemplate.postForEntity("/api/auth/login",
+                new LoginRequest("other@test.com", "password"), LoginResponse.class).getBody().token();
+        HttpHeaders otherHeaders = new HttpHeaders();
+        otherHeaders.set("Authorization", "Bearer " + otherToken);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                "/api/dashboards/" + employmentId,
+                HttpMethod.GET,
+                new HttpEntity<>(null, otherHeaders),
+                Void.class);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 }

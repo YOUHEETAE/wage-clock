@@ -4,8 +4,6 @@ import com.wageclock.wageclock.domain.worksession.WorkSession;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-
 @Repository
 public class DashboardRepository {
 
@@ -15,7 +13,7 @@ public class DashboardRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<DashboardResponse> getDashboards(Long employerId){
+    public DashboardResponse getDashboard(Long employmentId) {
         String sql = """
                 SELECT DISTINCT ON (e.id)
                 w.id AS worker_id, w.name AS worker_name, e.id AS employment_id,
@@ -31,19 +29,18 @@ public class DashboardRepository {
                 AND er.status = 'APPROVED'
                 GROUP BY pp.employment_id)
                 ewa ON ewa.employment_id = e.id
-                WHERE e.employer_id = ?
+                WHERE e.id = ?
                 ORDER BY e.id, ws.clock_in DESC
                 """;
 
-        return jdbcTemplate.query(sql, (rs, rowNum) -> new DashboardResponse(
+        return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new DashboardResponse(
                 rs.getLong("employment_id"),
                 rs.getLong("worker_id"),
                 rs.getString("worker_name"),
                 rs.getBigDecimal("earned_amount"),
                 rs.getBigDecimal("today_ewa_amount"),
                 rs.getString("status") != null ? WorkSession.WorkSessionStatus.valueOf(rs.getString("status")) : null
-
-        ), employerId);
+        ), employmentId);
     }
 
 }
