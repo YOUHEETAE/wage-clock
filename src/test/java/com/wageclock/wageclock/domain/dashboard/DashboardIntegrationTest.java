@@ -119,11 +119,11 @@ public class DashboardIntegrationTest {
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders),
                 EmploymentResponse.class);
         ResponseEntity<EmploymentResponse> employment2Response = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000)), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000), "테스트 사업장2"), employerHeaders),
                 EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
         this.employmentId2 = employment2Response.getBody().employmentId();

@@ -113,7 +113,7 @@ public class PayPeriodIntegrationTest {
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders),
                 EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
 

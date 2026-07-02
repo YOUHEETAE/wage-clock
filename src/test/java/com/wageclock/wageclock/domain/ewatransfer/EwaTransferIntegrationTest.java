@@ -107,7 +107,7 @@ public class EwaTransferIntegrationTest {
 
         employmentId = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders()),
+                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders()),
                 EmploymentResponse.class).getBody().employmentId();
 
         Long sessionId = testRestTemplate.postForEntity(
