@@ -17,8 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -164,5 +163,62 @@ public class WorkSessionServiceTest {
         workSessionService.resume(1L, 1L);
 
         verify(savedWorkSession).resume();
+    }
+
+    @Test
+    void getCurrentSession_employment_없음_예외() {
+        when(employmentRepository.findById(1L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class,
+                () -> workSessionService.getCurrentSession(1L, 1L));
+    }
+
+    @Test
+    void getCurrentSession_다른_워커_접근_예외() {
+        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(employment.getWorkerId()).thenReturn(2L);
+        assertThrows(UnauthorizedException.class,
+                () -> workSessionService.getCurrentSession(1L, 1L));
+    }
+
+    @Test
+    void getCurrentSession_세션_없으면_빈_Optional() {
+        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(employment.getWorkerId()).thenReturn(1L);
+        when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
+                .thenReturn(Optional.empty());
+
+        Optional<CurrentSessionResponse> result = workSessionService.getCurrentSession(1L, 1L);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getCurrentSession_WORKING_세션_반환() {
+        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(employment.getWorkerId()).thenReturn(1L);
+        when(savedWorkSession.getId()).thenReturn(10L);
+        when(savedWorkSession.getStatus()).thenReturn(WorkSession.WorkSessionStatus.WORKING);
+        when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
+                .thenReturn(Optional.of(savedWorkSession));
+
+        CurrentSessionResponse result = workSessionService.getCurrentSession(1L, 1L).get();
+
+        assertEquals(10L, result.sessionId());
+        assertEquals(WorkSession.WorkSessionStatus.WORKING, result.status());
+    }
+
+    @Test
+    void getCurrentSession_PAUSED_세션_반환() {
+        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(employment.getWorkerId()).thenReturn(1L);
+        when(savedWorkSession.getId()).thenReturn(10L);
+        when(savedWorkSession.getStatus()).thenReturn(WorkSession.WorkSessionStatus.PAUSED);
+        when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
+                .thenReturn(Optional.of(savedWorkSession));
+
+        CurrentSessionResponse result = workSessionService.getCurrentSession(1L, 1L).get();
+
+        assertEquals(10L, result.sessionId());
+        assertEquals(WorkSession.WorkSessionStatus.PAUSED, result.status());
     }
 }
