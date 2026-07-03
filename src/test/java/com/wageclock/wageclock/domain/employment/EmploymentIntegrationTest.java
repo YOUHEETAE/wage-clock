@@ -118,6 +118,16 @@ public class EmploymentIntegrationTest {
     }
 
     @Test
+    void 근로자가_employment_생성_시_예외() {
+        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + workerToken);
+        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, headers), Void.class);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+
+    @Test
     void 내_고용_목록_조회() {
         EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
         HttpHeaders employerHeaders = new HttpHeaders();
@@ -127,7 +137,7 @@ public class EmploymentIntegrationTest {
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<EmploymentResponse[]> response = testRestTemplate.exchange(
-                "/api/employments/my", HttpMethod.GET, new HttpEntity<>(workerHeaders), EmploymentResponse[].class);
+                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(workerHeaders), EmploymentResponse[].class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().length);
@@ -140,7 +150,7 @@ public class EmploymentIntegrationTest {
         HttpHeaders workerHeaders = new HttpHeaders();
         workerHeaders.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<EmploymentResponse[]> response = testRestTemplate.exchange(
-                "/api/employments/my", HttpMethod.GET, new HttpEntity<>(workerHeaders), EmploymentResponse[].class);
+                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(workerHeaders), EmploymentResponse[].class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(0, response.getBody().length);
@@ -176,7 +186,7 @@ public class EmploymentIntegrationTest {
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/employments/my", HttpMethod.GET, new HttpEntity<>(employerHeaders), Void.class);
+                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(employerHeaders), Void.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
