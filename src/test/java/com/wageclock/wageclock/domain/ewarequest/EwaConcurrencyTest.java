@@ -110,13 +110,11 @@ public class EwaConcurrencyTest {
         String employerToken = employerResponse.getBody().token();
         workerToken = workerResponse.getBody().token();
 
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-
         // 시급 3,600,000 → 1초당 1,000원 적립
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         HttpEntity<EmploymentRequest> employmentRequest = new HttpEntity<>(
-                new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders);
+                new EmploymentRequest("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders);
         ResponseEntity<EmploymentResponse> employmentResponse = restTemplate.postForEntity(
                 base + "/api/employments", employmentRequest, EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();

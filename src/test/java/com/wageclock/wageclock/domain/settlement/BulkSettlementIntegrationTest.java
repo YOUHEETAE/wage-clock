@@ -96,12 +96,10 @@ public class BulkSettlementIntegrationTest {
         workerToken = testRestTemplate.postForEntity("/api/auth/login",
                 new LoginRequest("worker@test.com", "password"),
                 LoginResponse.class).getBody().token();
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-
         HttpHeaders employerHeaders = employerHeaders();
         ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders),
                 EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
 
@@ -144,14 +142,12 @@ public class BulkSettlementIntegrationTest {
         String workerToken2 = testRestTemplate.postForEntity("/api/auth/login",
                 new LoginRequest("worker2@test.com", "password"),
                 LoginResponse.class).getBody().token();
-        Long workerId2 = workerRepository.findByEmail("worker2@test.com").get().getId();
-
         HttpHeaders headers2 = new HttpHeaders();
         headers2.set("Authorization", "Bearer " + workerToken2);
 
         Long employmentId2 = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId2, BigDecimal.valueOf(3_600_000), "테스트 사업장2"), employerHeaders()),
+                new HttpEntity<>(new EmploymentRequest("worker2@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장2"), employerHeaders()),
                 EmploymentResponse.class).getBody().employmentId();
 
         Long sessionId2 = testRestTemplate.postForEntity(

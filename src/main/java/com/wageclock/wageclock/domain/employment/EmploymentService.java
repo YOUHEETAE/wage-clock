@@ -30,10 +30,9 @@ public class EmploymentService {
     public EmploymentResponse createEmployment(EmploymentRequest employmentRequest, Long employerId){
         Employer employer = employerRepository.findById(employerId)
                 .orElseThrow(() -> new NotFoundException("employer not found"));
-        Worker worker = workerRepository.findById(employmentRequest.workerId())
+        Worker worker = workerRepository.findByEmail(employmentRequest.workerEmail())
                 .orElseThrow(() -> new NotFoundException("worker not found"));
-        if(employmentRepository.existsByEmployerIdAndWorkerId(employerId,
-                employmentRequest.workerId())){
+        if(employmentRepository.existsByEmployerIdAndWorkerId(employerId, worker.getId())){
             throw new DuplicateException("employment already exists");
         }
         Employment employment = employmentRepository.save(Employment.builder()
