@@ -1,96 +1,46 @@
 package com.wageclock.wageclock.domain.employment;
 
-import com.wageclock.wageclock.domain.auth.LoginRequest;
-import com.wageclock.wageclock.domain.auth.LoginResponse;
-import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
-import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.worker.WorkerRepository;
+import com.wageclock.wageclock.support.IntegrationTestBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
-public class EmploymentIntegrationTest {
-
-    @Container
-    static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16");
-    @Container
-    static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7-alpine")
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgreSQLContainer::getJdbcUrl);
-        registry.add("spring.datasource.username", postgreSQLContainer::getUsername);
-        registry.add("spring.datasource.password", postgreSQLContainer::getPassword);
-        registry.add("spring.data.redis.host", redisContainer::getHost);
-        registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
-    }
-
-    @Autowired
-    TestRestTemplate testRestTemplate;
-    @Autowired
-    WorkerRepository workerRepository;
-    @Autowired
-    EmployerRepository employerRepository;
-    @Autowired
-    EmploymentRepository employmentRepository;
+public class EmploymentIntegrationTest extends IntegrationTestBase {
 
     private String employerToken;
     private String workerToken;
 
-
     @AfterEach
     void tearDown() {
-        employmentRepository.deleteAll();
-        workerRepository.deleteAll();
-        employerRepository.deleteAll();
+        cleanCommon();
     }
 
     @BeforeEach
     public void setup() {
-        SignupRequest signupEmployerRequest = new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER);
-        SignupRequest signupWorkerRequest = new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER);
-        LoginRequest loginEmployerRequest = new LoginRequest("employer@test.com", "password");
-        LoginRequest loginWorkerRequest = new LoginRequest("worker@test.com", "password");
-        testRestTemplate.postForEntity("/api/auth/sign-up", signupEmployerRequest, Void.class);
-        testRestTemplate.postForEntity("/api/auth/sign-up", signupWorkerRequest, Void.class);
-        ResponseEntity<LoginResponse> employerResponse = testRestTemplate.postForEntity("/api/auth/login", loginEmployerRequest, LoginResponse.class);
-        ResponseEntity<LoginResponse> workerResponse = testRestTemplate.postForEntity("/api/auth/login", loginWorkerRequest, LoginResponse.class);
-        employerToken = employerResponse.getBody().token();
-        workerToken = workerResponse.getBody().token();
+        signUp("김사장", "employer@test.com", UserRole.EMPLOYER);
+        signUp("박사원", "worker@test.com", UserRole.WORKER);
+        employerToken = login("employer@test.com");
+        workerToken = login("worker@test.com");
     }
 
     @Test
     void 정상_employment_생성() {
         EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<EmploymentRequest> request = new HttpEntity<>(body, headers);
 
-        ResponseEntity<EmploymentResponse> response = testRestTemplate.postForEntity("/api/employments", request, EmploymentResponse.class);
+        ResponseEntity<EmploymentResponse> response = testRestTemplate.postForEntity(
+                "/api/employments",
+                new HttpEntity<>(body, authHeaders(employerToken)),
+                EmploymentResponse.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody().employmentId());
@@ -101,16 +51,13 @@ public class EmploymentIntegrationTest {
     @Test
     void 중복_employment_생성_시_예외() {
         EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<EmploymentRequest> request = new HttpEntity<>(body, headers);
-        testRestTemplate.postForEntity("/api/employments", request, EmploymentResponse.class);
+        testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, authHeaders(employerToken)), EmploymentResponse.class);
 
         EmploymentRequest duplicateBody = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(20000), "스타벅스 강남점");
-        HttpHeaders duplicateHeaders = new HttpHeaders();
-        duplicateHeaders.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<EmploymentRequest> duplicateRequest = new HttpEntity<>(duplicateBody, duplicateHeaders);
-        ResponseEntity<EmploymentResponse> duplicateResponse = testRestTemplate.postForEntity("/api/employments", duplicateRequest, EmploymentResponse.class);
+        ResponseEntity<EmploymentResponse> duplicateResponse = testRestTemplate.postForEntity(
+                "/api/employments",
+                new HttpEntity<>(duplicateBody, authHeaders(employerToken)),
+                EmploymentResponse.class);
 
         assertEquals(HttpStatus.CONFLICT, duplicateResponse.getStatusCode());
     }
@@ -118,24 +65,22 @@ public class EmploymentIntegrationTest {
     @Test
     void 근로자가_employment_생성_시_예외() {
         EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + workerToken);
-        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, headers), Void.class);
+        ResponseEntity<Void> response = testRestTemplate.postForEntity(
+                "/api/employments",
+                new HttpEntity<>(body, authHeaders(workerToken)),
+                Void.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 
     @Test
     void 내_고용_목록_조회() {
-        EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
-        HttpHeaders employerHeaders = new HttpHeaders();
-        employerHeaders.set("Authorization", "Bearer " + employerToken);
-        testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, employerHeaders), EmploymentResponse.class);
+        testRestTemplate.postForEntity("/api/employments",
+                new HttpEntity<>(new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점"), authHeaders(employerToken)),
+                EmploymentResponse.class);
 
-        HttpHeaders workerHeaders = new HttpHeaders();
-        workerHeaders.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<EmploymentResponse[]> response = testRestTemplate.exchange(
-                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(workerHeaders), EmploymentResponse[].class);
+                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(authHeaders(workerToken)), EmploymentResponse[].class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().length);
@@ -145,10 +90,8 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 고용_없을_때_빈_목록_반환() {
-        HttpHeaders workerHeaders = new HttpHeaders();
-        workerHeaders.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<EmploymentResponse[]> response = testRestTemplate.exchange(
-                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(workerHeaders), EmploymentResponse[].class);
+                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(authHeaders(workerToken)), EmploymentResponse[].class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(0, response.getBody().length);
@@ -156,13 +99,12 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 고용주_고용_목록_조회() {
-        EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
-        HttpHeaders employerHeaders = new HttpHeaders();
-        employerHeaders.set("Authorization", "Bearer " + employerToken);
-        testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, employerHeaders), EmploymentResponse.class);
+        testRestTemplate.postForEntity("/api/employments",
+                new HttpEntity<>(new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점"), authHeaders(employerToken)),
+                EmploymentResponse.class);
 
         ResponseEntity<EmploymentResponse[]> response = testRestTemplate.exchange(
-                "/api/employments/employer", HttpMethod.GET, new HttpEntity<>(employerHeaders), EmploymentResponse[].class);
+                "/api/employments/employer", HttpMethod.GET, new HttpEntity<>(authHeaders(employerToken)), EmploymentResponse[].class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().length);
@@ -171,20 +113,16 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 근로자가_고용주_엔드포인트_호출_시_예외() {
-        HttpHeaders workerHeaders = new HttpHeaders();
-        workerHeaders.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/employments/employer", HttpMethod.GET, new HttpEntity<>(workerHeaders), Void.class);
+                "/api/employments/employer", HttpMethod.GET, new HttpEntity<>(authHeaders(workerToken)), Void.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 
     @Test
     void 고용주가_근로자_엔드포인트_호출_시_예외() {
-        HttpHeaders employerHeaders = new HttpHeaders();
-        employerHeaders.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(employerHeaders), Void.class);
+                "/api/employments/worker", HttpMethod.GET, new HttpEntity<>(authHeaders(employerToken)), Void.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
