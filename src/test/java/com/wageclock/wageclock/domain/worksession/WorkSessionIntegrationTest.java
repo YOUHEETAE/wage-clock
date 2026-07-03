@@ -6,6 +6,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -70,6 +71,63 @@ public class WorkSessionIntegrationTest extends IntegrationTestBase {
         assertEquals(HttpStatus.OK, pauseResponse.getStatusCode());
         WorkSession workSession = workSessionRepository.findById(sessionId).get();
         assertEquals(WorkSession.WorkSessionStatus.PAUSED, workSession.getStatus());
+    }
+
+    @Test
+    void 현재_WORKING_세션_조회() {
+        Long sessionId = clockIn(employmentId, workerToken);
+
+        ResponseEntity<CurrentSessionResponse> response = testRestTemplate.exchange(
+                "/api/work-sessions/current?employmentId=" + employmentId,
+                HttpMethod.GET,
+                new HttpEntity<>(authHeaders(workerToken)),
+                CurrentSessionResponse.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(sessionId, response.getBody().sessionId());
+        assertEquals(WorkSession.WorkSessionStatus.WORKING, response.getBody().status());
+    }
+
+    @Test
+    void 현재_PAUSED_세션_조회() {
+        Long sessionId = clockIn(employmentId, workerToken);
+        testRestTemplate.postForEntity("/api/work-sessions/pause",
+                new HttpEntity<>(new ClockOutRequest(sessionId), authHeaders(workerToken)), Void.class);
+
+        ResponseEntity<CurrentSessionResponse> response = testRestTemplate.exchange(
+                "/api/work-sessions/current?employmentId=" + employmentId,
+                HttpMethod.GET,
+                new HttpEntity<>(authHeaders(workerToken)),
+                CurrentSessionResponse.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(sessionId, response.getBody().sessionId());
+        assertEquals(WorkSession.WorkSessionStatus.PAUSED, response.getBody().status());
+    }
+
+    @Test
+    void 세션_없을_때_204_반환() {
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                "/api/work-sessions/current?employmentId=" + employmentId,
+                HttpMethod.GET,
+                new HttpEntity<>(authHeaders(workerToken)),
+                Void.class);
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+    }
+
+    @Test
+    void 다른_워커_접근_시_401() {
+        signUp("다른사원", "other@test.com", UserRole.WORKER);
+        String otherToken = login("other@test.com");
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                "/api/work-sessions/current?employmentId=" + employmentId,
+                HttpMethod.GET,
+                new HttpEntity<>(authHeaders(otherToken)),
+                Void.class);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 
     @Test

@@ -1,11 +1,11 @@
 package com.wageclock.wageclock.domain.worksession;
 
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/work-sessions")
@@ -35,6 +35,16 @@ public class WorkSessionController {
         Long sessionId = clockOutRequest.sessionId();
         workSessionService.pause(sessionId, workerId);
     }
+    @Operation(summary = "현재 진행 중인 세션 조회 (WORKING / PAUSED)")
+    @GetMapping("/current")
+    public ResponseEntity<CurrentSessionResponse> getCurrentSession(
+            @RequestParam Long employmentId,
+            @AuthenticationPrincipal Long workerId) {
+        return workSessionService.getCurrentSession(employmentId, workerId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
     @Operation(summary = "근무 재개")
     @PostMapping("/resume")
     public void resume(@RequestBody ClockOutRequest clockOutRequest,
