@@ -83,10 +83,6 @@ public class WorkSession extends BaseEntity {
 
     public boolean isPaused(){ return status == WorkSessionStatus.PAUSED; }
 
-    public boolean isWorking(){
-        return status == WorkSessionStatus.WORKING;
-    }
-
     public BigDecimal getCurrentEarnedAmount() {
         if(isCompleted() || isPaused()) return this.earnedAmount;
         BigDecimal seconds = BigDecimal.valueOf(Duration.between(lastResumeAt, LocalDateTime.now()).toSeconds());

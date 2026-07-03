@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 public class WorkSessionService {
@@ -69,6 +70,18 @@ public class WorkSessionService {
         }
         workSession.pause();
     }
+    @Transactional(readOnly = true)
+    public Optional<CurrentSessionResponse> getCurrentSession(Long employmentId, Long workerId) {
+        Employment employment = employmentRepository.findById(employmentId)
+                .orElseThrow(() -> new NotFoundException("employment not found"));
+        if (!employment.getWorkerId().equals(workerId)) {
+            throw new UnauthorizedException("unauthorized");
+        }
+        return workSessionRepository
+                .findByEmploymentIdAndStatusNot(employmentId, WorkSession.WorkSessionStatus.COMPLETED)
+                .map(s -> new CurrentSessionResponse(s.getId(), s.getStatus()));
+    }
+
     @Transactional
     public void resume(Long sessionId, Long workerId){
         WorkSession workSession =  workSessionRepository.findById(sessionId)
