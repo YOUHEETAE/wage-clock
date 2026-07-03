@@ -91,8 +91,7 @@ public class WorkSessionIntegrationTest {
         String employerToken = employerResponse.getBody().token();
         workerToken = workerResponse.getBody().token();
 
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-        EmploymentRequest employmentRequest = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "테스트 사업장");
+        EmploymentRequest employmentRequest = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "테스트 사업장");
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         HttpEntity<EmploymentRequest> employmentHttpRequest = new HttpEntity<>(employmentRequest, employerHeaders);

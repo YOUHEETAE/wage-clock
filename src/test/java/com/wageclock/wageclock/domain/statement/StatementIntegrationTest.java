@@ -100,12 +100,11 @@ public class StatementIntegrationTest {
                         new LoginRequest("worker@test.com", "password"), LoginResponse.class)
                 .getBody().token();
 
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<EmploymentResponse> empResponse = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "테스트 사업장"), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "테스트 사업장"), employerHeaders),
                 EmploymentResponse.class);
         employmentId = empResponse.getBody().employmentId();
 

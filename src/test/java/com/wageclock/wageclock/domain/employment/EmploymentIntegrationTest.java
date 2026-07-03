@@ -60,7 +60,6 @@ public class EmploymentIntegrationTest {
 
     private String employerToken;
     private String workerToken;
-    private Long workerId;
 
 
     @AfterEach
@@ -82,12 +81,11 @@ public class EmploymentIntegrationTest {
         ResponseEntity<LoginResponse> workerResponse = testRestTemplate.postForEntity("/api/auth/login", loginWorkerRequest, LoginResponse.class);
         employerToken = employerResponse.getBody().token();
         workerToken = workerResponse.getBody().token();
-        workerId = workerRepository.findByEmail("worker@test.com").get().getId();
     }
 
     @Test
     void 정상_employment_생성() {
-        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
+        EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + employerToken);
         HttpEntity<EmploymentRequest> request = new HttpEntity<>(body, headers);
@@ -102,13 +100,13 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 중복_employment_생성_시_예외() {
-        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
+        EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + employerToken);
         HttpEntity<EmploymentRequest> request = new HttpEntity<>(body, headers);
         testRestTemplate.postForEntity("/api/employments", request, EmploymentResponse.class);
 
-        EmploymentRequest duplicateBody = new EmploymentRequest(workerId, BigDecimal.valueOf(20000), "스타벅스 강남점");
+        EmploymentRequest duplicateBody = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(20000), "스타벅스 강남점");
         HttpHeaders duplicateHeaders = new HttpHeaders();
         duplicateHeaders.set("Authorization", "Bearer " + employerToken);
         HttpEntity<EmploymentRequest> duplicateRequest = new HttpEntity<>(duplicateBody, duplicateHeaders);
@@ -119,7 +117,7 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 근로자가_employment_생성_시_예외() {
-        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
+        EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + workerToken);
         ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, headers), Void.class);
@@ -129,7 +127,7 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 내_고용_목록_조회() {
-        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
+        EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, employerHeaders), EmploymentResponse.class);
@@ -158,7 +156,7 @@ public class EmploymentIntegrationTest {
 
     @Test
     void 고용주_고용_목록_조회() {
-        EmploymentRequest body = new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "스타벅스 강남점");
+        EmploymentRequest body = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), "스타벅스 강남점");
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         testRestTemplate.postForEntity("/api/employments", new HttpEntity<>(body, employerHeaders), EmploymentResponse.class);

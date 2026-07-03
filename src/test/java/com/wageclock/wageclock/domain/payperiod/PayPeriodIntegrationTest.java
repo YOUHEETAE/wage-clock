@@ -106,14 +106,12 @@ public class PayPeriodIntegrationTest {
                         new LoginRequest("worker@test.com", "password"), LoginResponse.class)
                 .getBody().token();
 
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-
         // 시급 3,600,000 → 1초당 1,000원 적립
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         ResponseEntity<EmploymentResponse> employmentResponse = testRestTemplate.postForEntity(
                 "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders),
+                new HttpEntity<>(new EmploymentRequest("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders),
                 EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();
 
