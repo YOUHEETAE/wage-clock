@@ -1,48 +1,24 @@
 package com.wageclock.wageclock.domain.ewatransfer;
 
-import com.wageclock.wageclock.domain.auth.LoginRequest;
-import com.wageclock.wageclock.domain.auth.LoginResponse;
-import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
-import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.EmploymentRequest;
-import com.wageclock.wageclock.domain.employment.EmploymentResponse;
-import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.ewarequest.EwaRequestDto;
-import com.wageclock.wageclock.domain.ewarequest.EwaRequestRepository;
 import com.wageclock.wageclock.domain.ewarequest.EwaResponseDto;
 import com.wageclock.wageclock.domain.ewarequest.InitiateEwaResponse;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
 import com.wageclock.wageclock.domain.outbox.OutBoxScheduler;
-import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
-import com.wageclock.wageclock.domain.port.VirtualAccountPort;
-import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
-import com.wageclock.wageclock.domain.worker.WorkerRepository;
-import com.wageclock.wageclock.domain.worksession.ClockInRequest;
-import com.wageclock.wageclock.domain.worksession.ClockInResponse;
-import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import com.wageclock.wageclock.infrastructure.InterBankFailureNotification;
+import com.wageclock.wageclock.support.IntegrationTestBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -52,101 +28,40 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
-public class EwaTransferIntegrationTest {
+public class EwaTransferIntegrationTest extends IntegrationTestBase {
 
-    @Container
-    static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16");
-    @Container
-    static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7-alpine")
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgreSQLContainer::getJdbcUrl);
-        registry.add("spring.datasource.username", postgreSQLContainer::getUsername);
-        registry.add("spring.datasource.password", postgreSQLContainer::getPassword);
-        registry.add("spring.data.redis.host", redisContainer::getHost);
-        registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
-    }
-
-    @Autowired TestRestTemplate testRestTemplate;
-    @Autowired WorkerRepository workerRepository;
-    @Autowired EmployerRepository employerRepository;
-    @Autowired EmploymentRepository employmentRepository;
-    @Autowired WorkSessionRepository workSessionRepository;
-    @Autowired EwaRequestRepository ewaRequestRepository;
     @Autowired EwaTransferRepository ewaTransferRepository;
     @Autowired EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository;
-    @Autowired PayPeriodRepository payPeriodRepository;
     @Autowired EwaTransferScheduler ewaTransferScheduler;
     @Autowired OutBoxScheduler outBoxScheduler;
-    @MockitoBean WageTransferPort wageTransferPort;
-    @MockitoBean VirtualAccountPort virtualAccountPort;
 
     private String workerToken;
     private String employerToken;
     private Long employmentId;
 
-    @BeforeEach
-    void setUp() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/auth/sign-up",
-                new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/sign-up",
-                new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
-
-        employerToken = testRestTemplate.postForEntity("/api/auth/login",
-                new LoginRequest("employer@test.com", "password"),
-                LoginResponse.class).getBody().token();
-        workerToken = testRestTemplate.postForEntity("/api/auth/login",
-                new LoginRequest("worker@test.com", "password"),
-                LoginResponse.class).getBody().token();
-
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-
-        employmentId = testRestTemplate.postForEntity(
-                "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders()),
-                EmploymentResponse.class).getBody().employmentId();
-
-        Long sessionId = testRestTemplate.postForEntity(
-                "/api/work-sessions/clock-in",
-                new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders()),
-                ClockInResponse.class).getBody().sessionId();
-        Thread.sleep(2000);
-        testRestTemplate.postForEntity("/api/work-sessions/clock-out",
-                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders()), Void.class);
-    }
-
     @AfterEach
     void tearDown() {
         ewaTransferFailureOutBoxRepository.deleteAll();
         ewaTransferRepository.deleteAll();
-        ewaRequestRepository.deleteAll();
-        workSessionRepository.deleteAll();
-        payPeriodRepository.deleteAll();
-        employmentRepository.deleteAll();
-        workerRepository.deleteAll();
-        employerRepository.deleteAll();
+        cleanCommon();
     }
 
-    private HttpHeaders workerHeaders() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + workerToken);
-        return headers;
-    }
-
-    private HttpHeaders employerHeaders() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + employerToken);
-        return headers;
+    @BeforeEach
+    void setUp() throws InterruptedException {
+        signUp("김사장", "employer@test.com", UserRole.EMPLOYER);
+        signUp("박사원", "worker@test.com", UserRole.WORKER);
+        employerToken = login("employer@test.com");
+        workerToken = login("worker@test.com");
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장", employerToken);
+        Long sessionId = clockIn(employmentId, workerToken);
+        Thread.sleep(2000);
+        clockOut(sessionId, workerToken);
     }
 
     private Long requestEwa(BigDecimal amount) {
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
                 "/api/ewa-requests/request",
-                new HttpEntity<>(new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString()), workerHeaders()),
+                new HttpEntity<>(new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString()), authHeaders(workerToken)),
                 EwaResponseDto.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         return response.getBody().ewaRequestId();
@@ -155,7 +70,7 @@ public class EwaTransferIntegrationTest {
     private Long initiateEwa(Long ewaId) {
         testRestTemplate.postForEntity(
                 "/api/ewa-requests/" + ewaId + "/initiate",
-                new HttpEntity<>(null, employerHeaders()),
+                new HttpEntity<>(null, authHeaders(employerToken)),
                 InitiateEwaResponse.class);
         return ewaTransferRepository.findAll().get(0).getId();
     }
@@ -170,7 +85,7 @@ public class EwaTransferIntegrationTest {
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
-                new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
         assertEquals(EwaRequest.EwaRequestStatus.APPROVED, ewaRequest.getStatus());
@@ -191,7 +106,7 @@ public class EwaTransferIntegrationTest {
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
-                new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
         assertEquals(EwaRequest.EwaRequestStatus.PENDING, ewaRequest.getStatus());
@@ -209,7 +124,7 @@ public class EwaTransferIntegrationTest {
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
-                new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
 
         assertEquals(EwaTransfer.EwaTransferStatus.PENDING_INQUIRY,
                 ewaTransferRepository.findAll().get(0).getStatus());
@@ -234,7 +149,7 @@ public class EwaTransferIntegrationTest {
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
-                new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
         assertEquals(EwaRequest.EwaRequestStatus.UNKNOWN, ewaRequest.getStatus());
@@ -250,7 +165,7 @@ public class EwaTransferIntegrationTest {
 
         Long ewaId = requestEwa(BigDecimal.valueOf(100));
         testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
-                new HttpEntity<>(null, employerHeaders()), InitiateEwaResponse.class);
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
 
         assertEquals(EwaTransfer.EwaTransferStatus.UNKNOWN,
                 ewaTransferRepository.findAll().get(0).getStatus());

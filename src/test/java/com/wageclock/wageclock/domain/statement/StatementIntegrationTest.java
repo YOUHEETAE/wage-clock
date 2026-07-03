@@ -1,36 +1,15 @@
 package com.wageclock.wageclock.domain.statement;
 
-import com.wageclock.wageclock.domain.auth.LoginRequest;
-import com.wageclock.wageclock.domain.auth.LoginResponse;
-import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
-import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.EmploymentRequest;
-import com.wageclock.wageclock.domain.employment.EmploymentResponse;
-import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.ewarequest.EwaRequestRepository;
-import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
-import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
-import com.wageclock.wageclock.domain.worker.WorkerRepository;
-import com.wageclock.wageclock.domain.worksession.ClockInRequest;
-import com.wageclock.wageclock.domain.worksession.ClockInResponse;
-import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
+import com.wageclock.wageclock.support.IntegrationTestBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.*;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -38,33 +17,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
-public class StatementIntegrationTest {
-
-    @Container
-    static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16");
-    @Container
-    static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7-alpine")
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgreSQLContainer::getJdbcUrl);
-        registry.add("spring.datasource.username", postgreSQLContainer::getUsername);
-        registry.add("spring.datasource.password", postgreSQLContainer::getPassword);
-        registry.add("spring.data.redis.host", redisContainer::getHost);
-        registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
-    }
-
-    @Autowired TestRestTemplate testRestTemplate;
-    @Autowired WorkerRepository workerRepository;
-    @Autowired EmployerRepository employerRepository;
-    @Autowired EmploymentRepository employmentRepository;
-    @Autowired WorkSessionRepository workSessionRepository;
-    @Autowired EwaRequestRepository ewaRequestRepository;
-    @Autowired PayPeriodRepository payPeriodRepository;
-    @MockitoBean VirtualAccountPort virtualAccountPort;
+public class StatementIntegrationTest extends IntegrationTestBase {
 
     private String employerToken;
     private String employerToken2;
@@ -73,66 +26,30 @@ public class StatementIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        ewaRequestRepository.deleteAll();
-        workSessionRepository.deleteAll();
-        payPeriodRepository.deleteAll();
-        employmentRepository.deleteAll();
-        workerRepository.deleteAll();
-        employerRepository.deleteAll();
+        cleanCommon();
     }
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        testRestTemplate.postForEntity("/api/auth/sign-up",
-                new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/sign-up",
-                new SignupRequest("이사장", "employer2@test.com", "password", UserRole.EMPLOYER), Void.class);
-        testRestTemplate.postForEntity("/api/auth/sign-up",
-                new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
+        signUp("김사장", "employer@test.com", UserRole.EMPLOYER);
+        signUp("이사장", "employer2@test.com", UserRole.EMPLOYER);
+        signUp("박사원", "worker@test.com", UserRole.WORKER);
+        employerToken = login("employer@test.com");
+        employerToken2 = login("employer2@test.com");
+        String workerToken = login("worker@test.com");
 
-        employerToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("employer@test.com", "password"), LoginResponse.class)
-                .getBody().token();
-        employerToken2 = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("employer2@test.com", "password"), LoginResponse.class)
-                .getBody().token();
-        String workerToken = testRestTemplate.postForEntity("/api/auth/login",
-                        new LoginRequest("worker@test.com", "password"), LoginResponse.class)
-                .getBody().token();
-
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-        HttpHeaders employerHeaders = new HttpHeaders();
-        employerHeaders.set("Authorization", "Bearer " + employerToken);
-        ResponseEntity<EmploymentResponse> empResponse = testRestTemplate.postForEntity(
-                "/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerId, BigDecimal.valueOf(10000), "테스트 사업장"), employerHeaders),
-                EmploymentResponse.class);
-        employmentId = empResponse.getBody().employmentId();
-
-        HttpHeaders workerHeaders = new HttpHeaders();
-        workerHeaders.set("Authorization", "Bearer " + workerToken);
-        ResponseEntity<ClockInResponse> clockInResponse = testRestTemplate.postForEntity(
-                "/api/work-sessions/clock-in",
-                new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders),
-                ClockInResponse.class);
-        Long sessionId = clockInResponse.getBody().sessionId();
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), "테스트 사업장", employerToken);
+        Long sessionId = clockIn(employmentId, workerToken);
         Thread.sleep(1000);
-        testRestTemplate.postForEntity("/api/work-sessions/clock-out",
-                new HttpEntity<>(new ClockOutRequest(sessionId), workerHeaders), Void.class);
+        clockOut(sessionId, workerToken);
 
         testRestTemplate.postForEntity(
                 "/api/pay-periods/" + employmentId + "/close",
-                new HttpEntity<>(null, employerHeaders), Void.class);
+                new HttpEntity<>(null, authHeaders(employerToken)), Void.class);
 
         payPeriodId = payPeriodRepository
                 .findByEmploymentIdAndStatus(employmentId, PayPeriod.PayPeriodStatus.CLOSED)
                 .get().getId();
-    }
-
-    private HttpHeaders authHeader(String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + token);
-        return headers;
     }
 
     @Test
@@ -140,7 +57,7 @@ public class StatementIntegrationTest {
         ResponseEntity<Map> response = testRestTemplate.exchange(
                 "/api/statements/" + payPeriodId + "/pay-period",
                 HttpMethod.GET,
-                new HttpEntity<>(null, authHeader(employerToken)),
+                new HttpEntity<>(null, authHeaders(employerToken)),
                 Map.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -158,7 +75,7 @@ public class StatementIntegrationTest {
         ResponseEntity<List> response = testRestTemplate.exchange(
                 "/api/statements/" + payPeriodId + "/work-sessions",
                 HttpMethod.GET,
-                new HttpEntity<>(null, authHeader(employerToken)),
+                new HttpEntity<>(null, authHeaders(employerToken)),
                 List.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -176,7 +93,7 @@ public class StatementIntegrationTest {
         ResponseEntity<List> response = testRestTemplate.exchange(
                 "/api/statements/" + payPeriodId + "/ewa-requests",
                 HttpMethod.GET,
-                new HttpEntity<>(null, authHeader(employerToken)),
+                new HttpEntity<>(null, authHeaders(employerToken)),
                 List.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -188,7 +105,7 @@ public class StatementIntegrationTest {
         ResponseEntity<Void> response = testRestTemplate.exchange(
                 "/api/statements/" + payPeriodId + "/pay-period",
                 HttpMethod.GET,
-                new HttpEntity<>(null, authHeader(employerToken2)),
+                new HttpEntity<>(null, authHeaders(employerToken2)),
                 Void.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());

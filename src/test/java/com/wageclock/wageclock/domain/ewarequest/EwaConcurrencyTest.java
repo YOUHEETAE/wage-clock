@@ -1,33 +1,15 @@
 package com.wageclock.wageclock.domain.ewarequest;
 
-import com.wageclock.wageclock.domain.auth.LoginRequest;
-import com.wageclock.wageclock.domain.auth.LoginResponse;
-import com.wageclock.wageclock.domain.auth.SignupRequest;
 import com.wageclock.wageclock.domain.auth.UserRole;
-import com.wageclock.wageclock.domain.employer.EmployerRepository;
-import com.wageclock.wageclock.domain.employment.EmploymentRequest;
-import com.wageclock.wageclock.domain.employment.EmploymentResponse;
-import com.wageclock.wageclock.domain.employment.EmploymentRepository;
-import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
-import com.wageclock.wageclock.domain.worker.WorkerRepository;
-import com.wageclock.wageclock.domain.worksession.ClockInRequest;
-import com.wageclock.wageclock.domain.worksession.ClockInResponse;
-import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import com.wageclock.wageclock.domain.worksession.WorkSessionService;
+import com.wageclock.wageclock.support.IntegrationTestBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestTemplate;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -41,43 +23,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
-public class EwaConcurrencyTest {
+public class EwaConcurrencyTest extends IntegrationTestBase {
 
-    @Container
-    static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16");
-    @Container
-    static GenericContainer<?> redisContainer = new GenericContainer<>("redis:7-alpine")
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgreSQLContainer::getJdbcUrl);
-        registry.add("spring.datasource.username", postgreSQLContainer::getUsername);
-        registry.add("spring.datasource.password", postgreSQLContainer::getPassword);
-        registry.add("spring.data.redis.host", redisContainer::getHost);
-        registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
-        registry.add("JWT_SECRET", () -> "wageclock-secret-key-must-be-at-least-256-bits-long");
-    }
-
-    @LocalServerPort
-    int port;
-
-    @Autowired
-    WorkerRepository workerRepository;
-    @Autowired
-    EmployerRepository employerRepository;
-    @Autowired
-    EmploymentRepository employmentRepository;
-    @Autowired
-    WorkSessionRepository workSessionRepository;
-    @Autowired
-    EwaRequestRepository ewaRequestRepository;
-    @Autowired
-    PayPeriodRepository payPeriodRepository;
-    @Autowired
-    WorkSessionService workSessionService;
+    @LocalServerPort int port;
+    @Autowired WorkSessionService workSessionService;
 
     private String workerToken;
     private Long employmentId;
@@ -85,53 +34,22 @@ public class EwaConcurrencyTest {
 
     @AfterEach
     void tearDown() {
-        ewaRequestRepository.deleteAll();
-        workSessionRepository.deleteAll();
-        payPeriodRepository.deleteAll();
-        employmentRepository.deleteAll();
-        workerRepository.deleteAll();
-        employerRepository.deleteAll();
+        cleanCommon();
     }
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        String base = "http://localhost:" + port;
-
-        restTemplate.postForEntity(base + "/api/auth/sign-up",
-                new SignupRequest("김사장", "employer@test.com", "password", UserRole.EMPLOYER), Void.class);
-        restTemplate.postForEntity(base + "/api/auth/sign-up",
-                new SignupRequest("박사원", "worker@test.com", "password", UserRole.WORKER), Void.class);
-
-        ResponseEntity<LoginResponse> employerResponse = restTemplate.postForEntity(base + "/api/auth/login",
-                new LoginRequest("employer@test.com", "password"), LoginResponse.class);
-        ResponseEntity<LoginResponse> workerResponse = restTemplate.postForEntity(base + "/api/auth/login",
-                new LoginRequest("worker@test.com", "password"), LoginResponse.class);
-
-        String employerToken = employerResponse.getBody().token();
-        workerToken = workerResponse.getBody().token();
-
-        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
-
+        signUp("김사장", "employer@test.com", UserRole.EMPLOYER);
+        signUp("박사원", "worker@test.com", UserRole.WORKER);
+        String employerToken = login("employer@test.com");
+        workerToken = login("worker@test.com");
         // 시급 3,600,000 → 1초당 1,000원 적립
-        HttpHeaders employerHeaders = new HttpHeaders();
-        employerHeaders.set("Authorization", "Bearer " + employerToken);
-        HttpEntity<EmploymentRequest> employmentRequest = new HttpEntity<>(
-                new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders);
-        ResponseEntity<EmploymentResponse> employmentResponse = restTemplate.postForEntity(
-                base + "/api/employments", employmentRequest, EmploymentResponse.class);
-        this.employmentId = employmentResponse.getBody().employmentId();
-
-        HttpHeaders workerHeaders = new HttpHeaders();
-        workerHeaders.set("Authorization", "Bearer " + workerToken);
-        HttpEntity<ClockInRequest> clockInRequest = new HttpEntity<>(new ClockInRequest(employmentId), workerHeaders);
-        HttpEntity<ClockInResponse> response = restTemplate.
-                postForEntity(base + "/api/work-sessions/clock-in", clockInRequest, ClockInResponse.class);
-
-        Long sessionId = response.getBody().sessionId();
-
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장", employerToken);
+        Long sessionId = clockIn(employmentId, workerToken);
         // 1초 대기 → 약 1,000원 적립, 한도 약 300원
         Thread.sleep(1000);
-        workSessionService.pause(sessionId, employmentId);
+        Long workerId = workerRepository.findByEmail("worker@test.com").get().getId();
+        workSessionService.pause(sessionId, workerId);
     }
 
     @Test
