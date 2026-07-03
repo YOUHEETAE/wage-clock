@@ -5,10 +5,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 
 @Repository
 public interface EmploymentRepository extends JpaRepository<Employment,Long> {
     @Query("SELECT CASE WHEN COUNT(e) > 0 THEN true ELSE false END FROM Employment e WHERE e.employer.id = :employerId AND e.worker.id = :workerId")
     boolean existsByEmployerIdAndWorkerId(@Param("employerId") Long employerId, @Param("workerId") Long workerId);
 
+    List<Employment> findByWorker_Id(Long workerId);
+
+    List<Employment> findByEmployer_Id(Long employerId);
 }

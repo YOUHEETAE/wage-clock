@@ -9,6 +9,8 @@ import com.wageclock.wageclock.global.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class EmploymentService {
 
@@ -35,7 +37,22 @@ public class EmploymentService {
             throw new DuplicateException("employment already exists");
         }
         Employment employment = employmentRepository.save(Employment.builder()
-                .employer(employer).worker(worker).hourlyWage(employmentRequest.hourlyWage()).build());
-        return new EmploymentResponse(employment.getId(), employmentRequest.hourlyWage());
+                .employer(employer).worker(worker).hourlyWage(employmentRequest.hourlyWage())
+                .employmentName(employmentRequest.employmentName()).build());
+        return new EmploymentResponse(employment.getId(), employment.getHourlyWage(), employment.getEmploymentName());
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmploymentResponse> getWorkerEmployments(Long workerId) {
+        return employmentRepository.findByWorker_Id(workerId).stream()
+                .map(e -> new EmploymentResponse(e.getId(), e.getHourlyWage(), e.getEmploymentName()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmploymentResponse> getEmployerEmployments(Long employerId) {
+        return employmentRepository.findByEmployer_Id(employerId).stream()
+                .map(e -> new EmploymentResponse(e.getId(), e.getHourlyWage(), e.getEmploymentName()))
+                .toList();
     }
 }

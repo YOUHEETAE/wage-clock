@@ -116,7 +116,7 @@ public class EwaConcurrencyTest {
         HttpHeaders employerHeaders = new HttpHeaders();
         employerHeaders.set("Authorization", "Bearer " + employerToken);
         HttpEntity<EmploymentRequest> employmentRequest = new HttpEntity<>(
-                new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000)), employerHeaders);
+                new EmploymentRequest(workerId, BigDecimal.valueOf(3_600_000), "테스트 사업장"), employerHeaders);
         ResponseEntity<EmploymentResponse> employmentResponse = restTemplate.postForEntity(
                 base + "/api/employments", employmentRequest, EmploymentResponse.class);
         this.employmentId = employmentResponse.getBody().employmentId();

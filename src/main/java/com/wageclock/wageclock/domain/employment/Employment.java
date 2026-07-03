@@ -32,15 +32,19 @@ public class Employment extends BaseEntity {
     @Column(nullable = false)
     private BigDecimal hourlyWage;
 
+    @Column(nullable = false)
+    private String employmentName;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EmploymentStatus status;
 
     @Builder
-    public Employment(Worker worker, Employer employer, BigDecimal hourlyWage) {
+    public Employment(Worker worker, Employer employer, BigDecimal hourlyWage, String employmentName) {
         this.worker = worker;
         this.employer = employer;
         this.hourlyWage = hourlyWage;
+        this.employmentName = employmentName;
         this.status = EmploymentStatus.ACTIVE;
     }
 
