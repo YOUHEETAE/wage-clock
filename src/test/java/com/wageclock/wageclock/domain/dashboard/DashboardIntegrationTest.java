@@ -73,12 +73,15 @@ public class DashboardIntegrationTest extends IntegrationTestBase {
                 .filter(r -> r.employmentId().equals(employmentId))
                 .findFirst().get();
         assertNull(worker1.status());
-        assertTrue(worker1.todayEarnedAmount().compareTo(java.math.BigDecimal.ZERO) > 0);
+        assertNull(worker1.earnedAmount());
 
         DashboardResponse worker2 = java.util.Arrays.stream(response.getBody())
                 .filter(r -> !r.employmentId().equals(employmentId))
                 .findFirst().get();
         assertEquals(com.wageclock.wageclock.domain.worksession.WorkSession.WorkSessionStatus.WORKING, worker2.status());
+        assertNotNull(worker2.hourlyWage());
+        assertNotNull(worker2.lastResumeAt());
+        assertNotNull(worker2.earnedAmount());
     }
 
     @Test

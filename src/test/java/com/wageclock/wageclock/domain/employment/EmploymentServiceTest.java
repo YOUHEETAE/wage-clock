@@ -85,7 +85,7 @@ public class EmploymentServiceTest {
         when(workplaceRepository.findById(5L)).thenReturn(Optional.of(workplace));
         when(workplace.getEmployerId()).thenReturn(1L);
         when(worker.getId()).thenReturn(2L);
-        when(employmentRepository.existsByEmployerIdAndWorkerId(1L, 2L)).thenReturn(true);
+        when(employmentRepository.existsByWorkplace_IdAndWorker_Id(5L, 2L)).thenReturn(true);
         EmploymentRequest request = new EmploymentRequest("worker@test.com", BigDecimal.valueOf(10000), 5L);
         assertThrows(DuplicateException.class, () -> employmentService.createEmployment(request, 1L));
     }
@@ -97,7 +97,7 @@ public class EmploymentServiceTest {
         when(workplaceRepository.findById(5L)).thenReturn(Optional.of(workplace));
         when(workplace.getEmployerId()).thenReturn(1L);
         when(worker.getId()).thenReturn(2L);
-        when(employmentRepository.existsByEmployerIdAndWorkerId(1L, 2L)).thenReturn(false);
+        when(employmentRepository.existsByWorkplace_IdAndWorker_Id(5L, 2L)).thenReturn(false);
         when(employmentRepository.save(any())).thenReturn(savedEmployment);
         when(savedEmployment.getId()).thenReturn(10L);
         when(savedEmployment.getHourlyWage()).thenReturn(BigDecimal.valueOf(10000));
