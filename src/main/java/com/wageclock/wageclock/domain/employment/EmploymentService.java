@@ -41,7 +41,7 @@ public class EmploymentService {
         if (!workplace.getEmployerId().equals(employerId)) {
             throw new UnauthorizedException("unauthorized");
         }
-        if (employmentRepository.existsByEmployerIdAndWorkerId(employerId, worker.getId())) {
+        if (employmentRepository.existsByWorkplace_IdAndWorker_Id(employmentRequest.workplaceId(), worker.getId())) {
             throw new DuplicateException("employment already exists");
         }
         Employment employment = employmentRepository.save(Employment.builder()
