@@ -21,19 +21,15 @@ public class DashboardRepository {
                     e.id AS employment_id,
                     w.id AS worker_id,
                     w.name AS worker_name,
-                    COALESCE(today.today_earned, 0) AS earned_amount,
                     COALESCE(ewa.today_ewa_amount, 0) AS today_ewa_amount,
-                    active.status
+                    active.status,
+                    active.hourly_wage,
+                    active.earned_amount,
+                    active.last_resume_at
                 FROM employments e
                 JOIN workers w ON e.worker_id = w.id
                 LEFT JOIN (
-                    SELECT employment_id, SUM(earned_amount) AS today_earned
-                    FROM work_sessions
-                    WHERE DATE(clock_in) = CURRENT_DATE
-                    GROUP BY employment_id
-                ) today ON today.employment_id = e.id
-                LEFT JOIN (
-                    SELECT employment_id, status
+                    SELECT employment_id, status, hourly_wage, earned_amount, last_resume_at
                     FROM work_sessions
                     WHERE status IN ('WORKING', 'PAUSED')
                 ) active ON active.employment_id = e.id
@@ -52,9 +48,11 @@ public class DashboardRepository {
                 rs.getLong("employment_id"),
                 rs.getLong("worker_id"),
                 rs.getString("worker_name"),
-                rs.getBigDecimal("earned_amount"),
                 rs.getBigDecimal("today_ewa_amount"),
-                rs.getString("status") != null ? WorkSession.WorkSessionStatus.valueOf(rs.getString("status")) : null
+                rs.getString("status") != null ? WorkSession.WorkSessionStatus.valueOf(rs.getString("status")) : null,
+                rs.getBigDecimal("hourly_wage"),
+                rs.getBigDecimal("earned_amount"),
+                rs.getTimestamp("last_resume_at") != null ? rs.getTimestamp("last_resume_at").toLocalDateTime() : null
         ), workplaceId);
     }
 }
