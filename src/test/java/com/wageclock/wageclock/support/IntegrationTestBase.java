@@ -13,6 +13,9 @@ import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
+import com.wageclock.wageclock.domain.workplace.WorkplaceRepository;
+import com.wageclock.wageclock.domain.workplace.WorkplaceRequest;
+import com.wageclock.wageclock.domain.workplace.WorkplaceResponse;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
 import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
@@ -62,6 +65,7 @@ public abstract class IntegrationTestBase {
     @Autowired protected WorkSessionRepository workSessionRepository;
     @Autowired protected PayPeriodRepository payPeriodRepository;
     @Autowired protected EwaRequestRepository ewaRequestRepository;
+    @Autowired protected WorkplaceRepository workplaceRepository;
 
     protected void signUp(String name, String email, UserRole role) {
         testRestTemplate.postForEntity("/api/auth/sign-up",
@@ -80,9 +84,15 @@ public abstract class IntegrationTestBase {
         return headers;
     }
 
-    protected Long createEmployment(String workerEmail, BigDecimal hourlyWage, String name, String employerToken) {
+    protected Long createWorkplace(String name, String employerToken) {
+        return testRestTemplate.postForEntity("/api/workplaces",
+                new HttpEntity<>(new WorkplaceRequest(name, null), authHeaders(employerToken)),
+                WorkplaceResponse.class).getBody().workplaceId();
+    }
+
+    protected Long createEmployment(String workerEmail, BigDecimal hourlyWage, Long workplaceId, String employerToken) {
         return testRestTemplate.postForEntity("/api/employments",
-                new HttpEntity<>(new EmploymentRequest(workerEmail, hourlyWage, name), authHeaders(employerToken)),
+                new HttpEntity<>(new EmploymentRequest(workerEmail, hourlyWage, workplaceId), authHeaders(employerToken)),
                 EmploymentResponse.class).getBody().employmentId();
     }
 
@@ -102,6 +112,7 @@ public abstract class IntegrationTestBase {
         workSessionRepository.deleteAll();
         payPeriodRepository.deleteAll();
         employmentRepository.deleteAll();
+        workplaceRepository.deleteAll();
         workerRepository.deleteAll();
         employerRepository.deleteAll();
     }

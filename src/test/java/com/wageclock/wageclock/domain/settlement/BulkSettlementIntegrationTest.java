@@ -36,6 +36,7 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
     String employerToken;
     String workerToken;
     Long employmentId;
+    Long workplaceId;
 
     @BeforeEach
     void setUp() throws InterruptedException {
@@ -43,7 +44,8 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
         signUp("박사원", "worker@test.com", UserRole.WORKER);
         employerToken = login("employer@test.com");
         workerToken = login("worker@test.com");
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장", employerToken);
+        workplaceId = createWorkplace("테스트 사업장", employerToken);
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
         Thread.sleep(2000);
         clockOut(sessionId, workerToken);
@@ -60,7 +62,7 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
     private Long setupSecondWorker() throws InterruptedException {
         signUp("이직원", "worker2@test.com", UserRole.WORKER);
         String workerToken2 = login("worker2@test.com");
-        Long employmentId2 = createEmployment("worker2@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장2", employerToken);
+        Long employmentId2 = createEmployment("worker2@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
         Long sessionId2 = clockIn(employmentId2, workerToken2);
         Thread.sleep(2000);
         clockOut(sessionId2, workerToken2);
