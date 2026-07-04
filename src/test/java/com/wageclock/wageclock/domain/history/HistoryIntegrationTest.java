@@ -37,7 +37,8 @@ public class HistoryIntegrationTest extends IntegrationTestBase {
         employerToken = login("employer@test.com");
         workerToken = login("worker@test.com");
         workerToken2 = login("worker2@test.com");
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), "테스트 사업장", employerToken);
+        Long workplaceId = createWorkplace("테스트 사업장", employerToken);
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
         Thread.sleep(1000);
         clockOut(sessionId, workerToken);

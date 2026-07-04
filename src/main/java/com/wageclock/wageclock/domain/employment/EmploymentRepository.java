@@ -15,5 +15,4 @@ public interface EmploymentRepository extends JpaRepository<Employment,Long> {
 
     List<Employment> findByWorker_Id(Long workerId);
 
-    List<Employment> findByEmployer_Id(Long employerId);
 }

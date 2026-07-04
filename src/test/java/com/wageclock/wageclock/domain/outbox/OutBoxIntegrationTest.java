@@ -36,8 +36,9 @@ public class OutBoxIntegrationTest extends IntegrationTestBase {
         signUp("박사원", "worker@test.com", UserRole.WORKER);
         employerToken = login("employer@test.com");
         workerToken = login("worker@test.com");
+        Long workplaceId = createWorkplace("테스트 사업장", employerToken);
         // 시급 3,600,000 → 1초당 1,000원 적립
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장", employerToken);
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
         // 2초 대기 → 약 2,000원 적립 → 한도 약 600원
         Thread.sleep(2000);

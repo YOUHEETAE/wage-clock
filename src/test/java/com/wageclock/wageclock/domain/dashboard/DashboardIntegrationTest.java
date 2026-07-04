@@ -12,14 +12,14 @@ import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class DashboardIntegrationTest extends IntegrationTestBase {
 
     private String workerToken;
     private String employerToken;
+    private Long workplaceId;
     private Long employmentId;
-    private Long employmentId2;
     private String workerToken2;
 
     @AfterEach
@@ -36,9 +36,10 @@ public class DashboardIntegrationTest extends IntegrationTestBase {
         workerToken = login("worker@test.com");
         workerToken2 = login("worker2@test.com");
 
+        workplaceId = createWorkplace("테스트 사업장", employerToken);
         // 시급 3,600,000 → 1초당 1,000원 적립
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장", employerToken);
-        employmentId2 = createEmployment("worker2@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장2", employerToken);
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
+        Long employmentId2 = createEmployment("worker2@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
 
         Long sessionId = clockIn(employmentId, workerToken);
         clockIn(employmentId2, workerToken2);
@@ -49,32 +50,35 @@ public class DashboardIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void 사업장별_대시보드_조회() {
-        ResponseEntity<DashboardResponse> response1 = testRestTemplate.exchange(
-                "/api/dashboards/" + employmentId,
+    void 사업장_대시보드_전체_워커_조회() {
+        ResponseEntity<DashboardResponse[]> response = testRestTemplate.exchange(
+                "/api/dashboards/" + workplaceId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, authHeaders(employerToken)),
-                DashboardResponse.class);
-        ResponseEntity<DashboardResponse> response2 = testRestTemplate.exchange(
-                "/api/dashboards/" + employmentId2,
-                HttpMethod.GET,
-                new HttpEntity<>(null, authHeaders(employerToken)),
-                DashboardResponse.class);
-        assertEquals(HttpStatus.OK, response1.getStatusCode());
-        assertEquals(HttpStatus.OK, response2.getStatusCode());
-        assertEquals(employmentId, response1.getBody().employmentId());
-        assertEquals(employmentId2, response2.getBody().employmentId());
+                DashboardResponse[].class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(2, response.getBody().length);
     }
 
     @Test
-    void COMPLETED_세션_대시보드_조회() {
-        ResponseEntity<DashboardResponse> response = testRestTemplate.exchange(
-                "/api/dashboards/" + employmentId,
+    void 퇴근한_워커는_status_null_출근중인_워커는_WORKING() {
+        ResponseEntity<DashboardResponse[]> response = testRestTemplate.exchange(
+                "/api/dashboards/" + workplaceId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, authHeaders(employerToken)),
-                DashboardResponse.class);
+                DashboardResponse[].class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("COMPLETED", response.getBody().status().name());
+
+        DashboardResponse worker1 = java.util.Arrays.stream(response.getBody())
+                .filter(r -> r.employmentId().equals(employmentId))
+                .findFirst().get();
+        assertNull(worker1.status());
+        assertTrue(worker1.todayEarnedAmount().compareTo(java.math.BigDecimal.ZERO) > 0);
+
+        DashboardResponse worker2 = java.util.Arrays.stream(response.getBody())
+                .filter(r -> !r.employmentId().equals(employmentId))
+                .findFirst().get();
+        assertEquals(com.wageclock.wageclock.domain.worksession.WorkSession.WorkSessionStatus.WORKING, worker2.status());
     }
 
     @Test
@@ -83,7 +87,7 @@ public class DashboardIntegrationTest extends IntegrationTestBase {
         String otherToken = login("other@test.com");
 
         ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/dashboards/" + employmentId,
+                "/api/dashboards/" + workplaceId,
                 HttpMethod.GET,
                 new HttpEntity<>(null, authHeaders(otherToken)),
                 Void.class);
