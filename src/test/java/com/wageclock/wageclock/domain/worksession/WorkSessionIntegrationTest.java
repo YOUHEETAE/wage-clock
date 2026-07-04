@@ -30,7 +30,8 @@ public class WorkSessionIntegrationTest extends IntegrationTestBase {
         signUp("박사원", "worker@test.com", UserRole.WORKER);
         String employerToken = login("employer@test.com");
         workerToken = login("worker@test.com");
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), "테스트 사업장", employerToken);
+        Long workplaceId = createWorkplace("테스트 사업장", employerToken);
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), workplaceId, employerToken);
     }
 
     @Test

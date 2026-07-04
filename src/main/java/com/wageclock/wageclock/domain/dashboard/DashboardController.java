@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/dashboards")
 public class DashboardController {
@@ -17,10 +19,10 @@ public class DashboardController {
         this.dashboardService = dashboardService;
     }
 
-    @Operation(summary = "고용주 대시보드 조회 (사업장별 근무 현황)")
-    @GetMapping("/{employmentId}")
-    public DashboardResponse getDashboard(@PathVariable Long employmentId,
-                                          @AuthenticationPrincipal Long employerId) {
-        return dashboardService.getDashboard(employmentId, employerId);
+    @Operation(summary = "고용주 대시보드 조회 (사업장 전체 워커 근무 현황)")
+    @GetMapping("/{workplaceId}")
+    public List<DashboardResponse> getDashboard(@PathVariable Long workplaceId,
+                                                @AuthenticationPrincipal Long employerId) {
+        return dashboardService.getDashboard(workplaceId, employerId);
     }
 }

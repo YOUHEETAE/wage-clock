@@ -38,7 +38,8 @@ public class StatementIntegrationTest extends IntegrationTestBase {
         employerToken2 = login("employer2@test.com");
         String workerToken = login("worker@test.com");
 
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), "테스트 사업장", employerToken);
+        Long workplaceId = createWorkplace("테스트 사업장", employerToken);
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
         Thread.sleep(1000);
         clockOut(sessionId, workerToken);

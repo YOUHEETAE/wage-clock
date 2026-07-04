@@ -52,7 +52,8 @@ public class EwaTransferIntegrationTest extends IntegrationTestBase {
         signUp("박사원", "worker@test.com", UserRole.WORKER);
         employerToken = login("employer@test.com");
         workerToken = login("worker@test.com");
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), "테스트 사업장", employerToken);
+        Long workplaceId = createWorkplace("테스트 사업장", employerToken);
+        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
         Thread.sleep(2000);
         clockOut(sessionId, workerToken);

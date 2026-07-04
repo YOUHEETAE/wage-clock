@@ -2,6 +2,7 @@ package com.wageclock.wageclock.domain.employment;
 
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.worker.Worker;
+import com.wageclock.wageclock.domain.workplace.Workplace;
 import com.wageclock.wageclock.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -29,23 +30,36 @@ public class Employment extends BaseEntity {
     @JoinColumn(name = "employer_id", nullable = false)
     private Employer employer;
 
-    @Column(nullable = false)
-    private BigDecimal hourlyWage;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workplace_id", nullable = false)
+    private Workplace workplace;
 
     @Column(nullable = false)
-    private String employmentName;
+    private BigDecimal hourlyWage;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EmploymentStatus status;
 
     @Builder
-    public Employment(Worker worker, Employer employer, BigDecimal hourlyWage, String employmentName) {
+    public Employment(Worker worker, Employer employer, Workplace workplace, BigDecimal hourlyWage) {
         this.worker = worker;
         this.employer = employer;
+        this.workplace = workplace;
         this.hourlyWage = hourlyWage;
-        this.employmentName = employmentName;
         this.status = EmploymentStatus.ACTIVE;
+    }
+
+    public Long getWorkplaceId() {
+        return workplace.getId();
+    }
+
+    public String getWorkplaceName() {
+        return workplace.getName();
+    }
+
+    public String getWorkplaceAddress() {
+        return workplace.getAddress();
     }
 
     public enum EmploymentStatus {
@@ -55,6 +69,10 @@ public class Employment extends BaseEntity {
     }
     public Long getWorkerId() {
         return worker.getId();
+    }
+
+    public Worker getWorker() {
+        return worker;
     }
 
     public Long getEmployerId() {
