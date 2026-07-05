@@ -64,12 +64,13 @@ public class WorkSessionIntegrationTest extends IntegrationTestBase {
     void 정상_pause() {
         Long sessionId = clockIn(employmentId, workerToken);
 
-        ResponseEntity<Void> pauseResponse = testRestTemplate.postForEntity(
+        ResponseEntity<PauseResponse> pauseResponse = testRestTemplate.postForEntity(
                 "/api/work-sessions/pause",
                 new HttpEntity<>(new ClockOutRequest(sessionId), authHeaders(workerToken)),
-                Void.class);
+                PauseResponse.class);
 
         assertEquals(HttpStatus.OK, pauseResponse.getStatusCode());
+        assertNotNull(pauseResponse.getBody().earnedAmount());
         WorkSession workSession = workSessionRepository.findById(sessionId).get();
         assertEquals(WorkSession.WorkSessionStatus.PAUSED, workSession.getStatus());
     }
@@ -87,13 +88,15 @@ public class WorkSessionIntegrationTest extends IntegrationTestBase {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(sessionId, response.getBody().sessionId());
         assertEquals(WorkSession.WorkSessionStatus.WORKING, response.getBody().status());
+        assertNotNull(response.getBody().hourlyWage());
+        assertNotNull(response.getBody().lastResumeAt());
     }
 
     @Test
     void 현재_PAUSED_세션_조회() {
         Long sessionId = clockIn(employmentId, workerToken);
         testRestTemplate.postForEntity("/api/work-sessions/pause",
-                new HttpEntity<>(new ClockOutRequest(sessionId), authHeaders(workerToken)), Void.class);
+                new HttpEntity<>(new ClockOutRequest(sessionId), authHeaders(workerToken)), PauseResponse.class);
 
         ResponseEntity<CurrentSessionResponse> response = testRestTemplate.exchange(
                 "/api/work-sessions/current?employmentId=" + employmentId,
@@ -104,6 +107,7 @@ public class WorkSessionIntegrationTest extends IntegrationTestBase {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(sessionId, response.getBody().sessionId());
         assertEquals(WorkSession.WorkSessionStatus.PAUSED, response.getBody().status());
+        assertNotNull(response.getBody().earnedAmount());
     }
 
     @Test
@@ -137,14 +141,15 @@ public class WorkSessionIntegrationTest extends IntegrationTestBase {
         testRestTemplate.postForEntity(
                 "/api/work-sessions/pause",
                 new HttpEntity<>(new ClockOutRequest(sessionId), authHeaders(workerToken)),
-                Void.class);
+                PauseResponse.class);
 
-        ResponseEntity<Void> resumeResponse = testRestTemplate.postForEntity(
+        ResponseEntity<ResumeResponse> resumeResponse = testRestTemplate.postForEntity(
                 "/api/work-sessions/resume",
                 new HttpEntity<>(new ClockOutRequest(sessionId), authHeaders(workerToken)),
-                Void.class);
+                ResumeResponse.class);
 
         assertEquals(HttpStatus.OK, resumeResponse.getStatusCode());
+        assertNotNull(resumeResponse.getBody().lastResumeAt());
         WorkSession workSession = workSessionRepository.findById(sessionId).get();
         assertEquals(WorkSession.WorkSessionStatus.WORKING, workSession.getStatus());
     }

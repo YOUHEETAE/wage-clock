@@ -1,3 +1,8 @@
 package com.wageclock.wageclock.domain.worksession;
 
-public record CurrentSessionResponse(Long sessionId, WorkSession.WorkSessionStatus status) {}
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+public record CurrentSessionResponse(Long sessionId, WorkSession.WorkSessionStatus status,
+                                     BigDecimal hourlyWage, BigDecimal earnedAmount,
+                                     LocalDateTime lastResumeAt) {}
