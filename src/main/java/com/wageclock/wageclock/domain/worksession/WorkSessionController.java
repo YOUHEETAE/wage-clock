@@ -30,10 +30,9 @@ public class WorkSessionController {
     }
     @Operation(summary = "근무 일시정지")
     @PostMapping("/pause")
-    public void pause(@RequestBody ClockOutRequest clockOutRequest,
-                      @AuthenticationPrincipal Long workerId){
-        Long sessionId = clockOutRequest.sessionId();
-        workSessionService.pause(sessionId, workerId);
+    public PauseResponse pause(@RequestBody ClockOutRequest clockOutRequest,
+                               @AuthenticationPrincipal Long workerId){
+        return workSessionService.pause(clockOutRequest.sessionId(), workerId);
     }
     @Operation(summary = "현재 진행 중인 세션 조회 (WORKING / PAUSED)")
     @GetMapping("/current")
@@ -47,9 +46,8 @@ public class WorkSessionController {
 
     @Operation(summary = "근무 재개")
     @PostMapping("/resume")
-    public void resume(@RequestBody ClockOutRequest clockOutRequest,
-                       @AuthenticationPrincipal Long workerId){
-        Long sessionId = clockOutRequest.sessionId();
-        workSessionService.resume(sessionId, workerId);
+    public ResumeResponse resume(@RequestBody ClockOutRequest clockOutRequest,
+                                 @AuthenticationPrincipal Long workerId){
+        return workSessionService.resume(clockOutRequest.sessionId(), workerId);
     }
 }
