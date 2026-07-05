@@ -62,13 +62,14 @@ public class WorkSessionService {
         return new ClockOutResponse(workSession.getClockOut(), workSession.getEarnedAmount());
     }
     @Transactional
-    public void pause(Long sessionId, Long workerId){
+    public PauseResponse pause(Long sessionId, Long workerId){
         WorkSession workSession = workSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("work session not found"));
         if(!workSession.getWorkerId().equals(workerId)){
             throw new UnauthorizedException("unauthorized");
         }
         workSession.pause();
+        return new PauseResponse(workSession.getEarnedAmount());
     }
     @Transactional(readOnly = true)
     public Optional<CurrentSessionResponse> getCurrentSession(Long employmentId, Long workerId) {
@@ -79,16 +80,18 @@ public class WorkSessionService {
         }
         return workSessionRepository
                 .findByEmploymentIdAndStatusNot(employmentId, WorkSession.WorkSessionStatus.COMPLETED)
-                .map(s -> new CurrentSessionResponse(s.getId(), s.getStatus()));
+                .map(s -> new CurrentSessionResponse(s.getId(), s.getStatus(),
+                        s.getHourlyWage(), s.getEarnedAmount(), s.getLastResumeAt()));
     }
 
     @Transactional
-    public void resume(Long sessionId, Long workerId){
+    public ResumeResponse resume(Long sessionId, Long workerId){
         WorkSession workSession =  workSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("work session not found"));
         if(!workSession.getWorkerId().equals(workerId)){
             throw new UnauthorizedException("unauthorized");
         }
         workSession.resume();
+        return new ResumeResponse(workSession.getLastResumeAt());
     }
 }
