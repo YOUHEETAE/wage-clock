@@ -49,7 +49,7 @@ public class StatementIntegrationTest extends IntegrationTestBase {
                 new HttpEntity<>(null, authHeaders(employerToken)), Void.class);
 
         payPeriodId = payPeriodRepository
-                .findByEmploymentIdAndStatus(employmentId, PayPeriod.PayPeriodStatus.CLOSED)
+                .findByEmployment_IdAndStatus(employmentId, PayPeriod.PayPeriodStatus.CLOSED)
                 .get().getId();
     }
 

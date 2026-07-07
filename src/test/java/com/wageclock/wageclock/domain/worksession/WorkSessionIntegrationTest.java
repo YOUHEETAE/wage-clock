@@ -44,6 +44,7 @@ public class WorkSessionIntegrationTest extends IntegrationTestBase {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody().sessionId());
         assertNotNull(response.getBody().clockIn());
+        assertNotNull(response.getBody().hourlyWage());
     }
 
     @Test

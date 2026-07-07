@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/pay-periods")
 public class PayPeriodController {
@@ -25,5 +27,19 @@ public class PayPeriodController {
     public PayPeriodSummaryResponse getSummary(@PathVariable Long employmentId,
             @AuthenticationPrincipal Long callerId){
         return payPeriodService.getPayPeriodSummaryResponse(employmentId, callerId);
+    }
+
+    @Operation(summary = "사업장 전체 정산 요약 목록 조회 (고용주)")
+    @GetMapping("/summaries")
+    public List<PayPeriodSummaryResponse> getSummaries(@RequestParam Long workplaceId,
+                                                       @AuthenticationPrincipal Long employerId) {
+        return payPeriodService.getPayPeriodSummaries(workplaceId, employerId);
+    }
+
+    @Operation(summary = "선택 직원 일괄 정산 마감 (고용주)")
+    @PostMapping("/bulk-close")
+    public List<ClosePayPeriodResponse> bulkClose(@RequestBody List<Long> employmentIds,
+                                                  @AuthenticationPrincipal Long employerId) {
+        return payPeriodService.bulkClosePayPeriods(employmentIds, employerId);
     }
 }
