@@ -34,7 +34,7 @@ public class PayPeriodSummaryRepository {
                         status,
                         CASE
                             WHEN status = 'WORKING'
-                                THEN ROUND(earned_amount + (hourly_wage / 3600 * TIMESTAMPDIFF(SECOND, last_resume_at, NOW())), 2)
+                                THEN ROUND(earned_amount + (hourly_wage / 3600 * EXTRACT(EPOCH FROM (NOW() - last_resume_at))), 2)
                             ELSE earned_amount
                         END AS current_earned
                     FROM work_sessions

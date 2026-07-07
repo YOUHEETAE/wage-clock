@@ -179,4 +179,34 @@ public class EwaIntegrationTest extends IntegrationTestBase {
         Long newEwaId = requestEwa(BigDecimal.valueOf(500));
         assertNotNull(newEwaId);
     }
+
+    @Test
+    void WORKING_세션_중_EWA_요청_현재_적립액_반영() throws InterruptedException {
+        clockIn(employmentId, workerToken);
+        Thread.sleep(1000);
+
+        EwaRequestDto requestDto = new EwaRequestDto(employmentId, BigDecimal.valueOf(100), UUID.randomUUID().toString());
+        ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
+                "/api/ewa-requests/request",
+                new HttpEntity<>(requestDto, authHeaders(workerToken)),
+                EwaResponseDto.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.getBody().status());
+    }
+
+    @Test
+    void WORKING_세션_중_한도_초과_EWA_요청_실패() throws InterruptedException {
+        clockIn(employmentId, workerToken);
+        Thread.sleep(1000);
+
+        // totalEarnedAmount(2000) + currentEarned(~1000) = ~3000, 한도 30% = ~900
+        EwaRequestDto requestDto = new EwaRequestDto(employmentId, BigDecimal.valueOf(10000), UUID.randomUUID().toString());
+        ResponseEntity<Void> response = testRestTemplate.postForEntity(
+                "/api/ewa-requests/request",
+                new HttpEntity<>(requestDto, authHeaders(workerToken)),
+                Void.class);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
 }
