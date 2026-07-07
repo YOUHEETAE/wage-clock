@@ -15,10 +15,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 
@@ -30,6 +30,8 @@ public class PayPeriodServiceTest {
     private PayPeriodRepository payPeriodRepository;
     @Mock
     private WorkSessionRepository workSessionRepository;
+    @Mock
+    private PayPeriodSummaryRepository payPeriodSummaryRepository;
     @Mock
     Employment employment;
     @Mock
@@ -135,6 +137,7 @@ public class PayPeriodServiceTest {
         assertEquals(0, response.totalEarnedAmount().compareTo(BigDecimal.valueOf(10000)));
         assertEquals(0, response.totalEwaAmount().compareTo(BigDecimal.valueOf(1000)));
         assertEquals(0, response.remainingEwaLimit().compareTo(BigDecimal.valueOf(2000)));
+        assertNull(response.activeSessionStatus());
     }
 
     @Test
@@ -153,10 +156,26 @@ public class PayPeriodServiceTest {
         when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
                 .thenReturn(Optional.of(workSession));
         when(workSession.getCurrentEarnedAmount()).thenReturn(BigDecimal.valueOf(5000));
+        when(workSession.getStatus()).thenReturn(WorkSession.WorkSessionStatus.WORKING);
 
         PayPeriodSummaryResponse response = payPeriodService.getPayPeriodSummaryResponse(1L, 1L);
         assertEquals(0, response.totalEarnedAmount().compareTo(BigDecimal.valueOf(15000)));
         assertEquals(0, response.totalEwaAmount().compareTo(BigDecimal.valueOf(1000)));
         assertEquals(0, response.remainingEwaLimit().compareTo(BigDecimal.valueOf(3500)));
+        assertEquals(WorkSession.WorkSessionStatus.WORKING, response.activeSessionStatus());
+    }
+
+    @Test
+    void getPayPeriodSummaries_JDBC_레포지토리_위임() {
+        PayPeriodSummaryResponse summaryResponse = new PayPeriodSummaryResponse(
+                1L, "박사원", LocalDate.now(),
+                BigDecimal.valueOf(10000), BigDecimal.valueOf(1000),
+                BigDecimal.valueOf(2000), null);
+        when(payPeriodSummaryRepository.getSummaries(1L, 2L)).thenReturn(List.of(summaryResponse));
+
+        List<PayPeriodSummaryResponse> result = payPeriodService.getPayPeriodSummaries(1L, 2L);
+
+        assertEquals(1, result.size());
+        assertEquals("박사원", result.getFirst().workerName());
     }
 }

@@ -16,11 +16,14 @@ public class PayPeriodService {
 
     private final PayPeriodRepository payPeriodRepository;
     private final WorkSessionRepository workSessionRepository;
+    private final PayPeriodSummaryRepository payPeriodSummaryRepository;
 
     public PayPeriodService(PayPeriodRepository payPeriodRepository,
-                            WorkSessionRepository workSessionRepository) {
+                            WorkSessionRepository workSessionRepository,
+                            PayPeriodSummaryRepository payPeriodSummaryRepository) {
         this.payPeriodRepository = payPeriodRepository;
         this.workSessionRepository = workSessionRepository;
+        this.payPeriodSummaryRepository = payPeriodSummaryRepository;
     }
 
     @Transactional
@@ -51,25 +54,15 @@ public class PayPeriodService {
         if(!payPeriod.getEmployerId().equals(callerId) && !payPeriod.getWorkerId().equals(callerId)){
             throw new UnauthorizedException("unauthorized");
         }
-        BigDecimal currentEarned = workSessionRepository
-                .findByEmploymentIdAndStatusNot(employmentId, WorkSession.WorkSessionStatus.COMPLETED)
-                .map(WorkSession::getCurrentEarnedAmount)
-                .orElse(BigDecimal.ZERO);
-        return toSummaryResponse(payPeriod, currentEarned);
+        java.util.Optional<WorkSession> activeSession = workSessionRepository
+                .findByEmploymentIdAndStatusNot(employmentId, WorkSession.WorkSessionStatus.COMPLETED);
+        BigDecimal currentEarned = activeSession.map(WorkSession::getCurrentEarnedAmount).orElse(BigDecimal.ZERO);
+        return toSummaryResponse(payPeriod, currentEarned, activeSession.map(WorkSession::getStatus).orElse(null));
     }
 
     @Transactional(readOnly = true)
     public List<PayPeriodSummaryResponse> getPayPeriodSummaries(Long workplaceId, Long employerId) {
-        return payPeriodRepository.findAllByWorkplaceIdAndEmployerIdAndStatusActive(workplaceId, employerId)
-                .stream()
-                .map(pp -> {
-                    BigDecimal currentEarned = workSessionRepository
-                            .findByEmploymentIdAndStatusNot(pp.getEmploymentId(), WorkSession.WorkSessionStatus.COMPLETED)
-                            .map(WorkSession::getCurrentEarnedAmount)
-                            .orElse(BigDecimal.ZERO);
-                    return toSummaryResponse(pp, currentEarned);
-                })
-                .toList();
+        return payPeriodSummaryRepository.getSummaries(workplaceId, employerId);
     }
 
     @Transactional
@@ -89,13 +82,15 @@ public class PayPeriodService {
                 .toList();
     }
 
-    private PayPeriodSummaryResponse toSummaryResponse(PayPeriod payPeriod, BigDecimal currentEarned) {
+    private PayPeriodSummaryResponse toSummaryResponse(PayPeriod payPeriod, BigDecimal currentEarned,
+                                                        WorkSession.WorkSessionStatus activeSessionStatus) {
         return new PayPeriodSummaryResponse(
                 payPeriod.getEmploymentId(),
                 payPeriod.getWorkerName(),
                 payPeriod.getPeriodStart(),
                 payPeriod.getTotalEarnedAmount().add(currentEarned),
                 payPeriod.getTotalEwaAmount(),
-                payPeriod.getRemainingEwaLimitWith(currentEarned));
+                payPeriod.getRemainingEwaLimitWith(currentEarned),
+                activeSessionStatus);
     }
 }
