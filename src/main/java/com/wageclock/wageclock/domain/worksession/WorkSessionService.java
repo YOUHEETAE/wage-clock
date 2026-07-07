@@ -39,7 +39,7 @@ public class WorkSessionService {
             throw new DuplicateException("this WorkSession already exists");
         }
         PayPeriod payPeriod = payPeriodRepository
-                .findByEmploymentIdAndStatus(employment.getId(), PayPeriod.PayPeriodStatus.ACTIVE)
+                .findByEmployment_IdAndStatus(employment.getId(), PayPeriod.PayPeriodStatus.ACTIVE)
                 .orElseGet(() -> payPeriodRepository.save(new PayPeriod(employment)));
         WorkSession workSession = workSessionRepository.save(
                 WorkSession.builder()
@@ -47,7 +47,7 @@ public class WorkSessionService {
                         .employment(employment)
                         .payPeriod(payPeriod)
                         .build());
-        return new ClockInResponse(workSession.getId(), workSession.getClockIn());
+        return new ClockInResponse(workSession.getId(), workSession.getClockIn(), workSession.getHourlyWage());
     }
 
     @Transactional

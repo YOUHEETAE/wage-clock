@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Repository
 public interface PayPeriodRepository extends JpaRepository<PayPeriod, Long> {
-    Optional<PayPeriod> findByEmploymentIdAndStatus(Long employmentId, PayPeriod.PayPeriodStatus status);
+    Optional<PayPeriod> findByEmployment_IdAndStatus(Long employmentId, PayPeriod.PayPeriodStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM PayPeriod p WHERE p.employment.id = :employmentId AND p.status = :status")
@@ -23,6 +23,11 @@ public interface PayPeriodRepository extends JpaRepository<PayPeriod, Long> {
     @Query("SELECT p FROM PayPeriod p WHERE p.employment.id IN :employmentIds AND p.employment.employer.id = :employerId AND p.status = 'ACTIVE'")
     List<PayPeriod> findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(
             @Param("employmentIds") List<Long> employmentIds,
+            @Param("employerId") Long employerId);
+
+    @Query("SELECT p FROM PayPeriod p WHERE p.employment.workplace.id = :workplaceId AND p.employment.employer.id = :employerId AND p.status = 'ACTIVE'")
+    List<PayPeriod> findAllByWorkplaceIdAndEmployerIdAndStatusActive(
+            @Param("workplaceId") Long workplaceId,
             @Param("employerId") Long employerId);
 
 
