@@ -34,12 +34,12 @@ public class EwaRequestProcessor {
         if (!payPeriod.getWorkerId().equals(workerId)) {
             throw new UnauthorizedException("Invalid worker Id");
         }
-        BigDecimal pausedEarnedAmount = workSessionRepository
-                .findByEmploymentIdAndStatus(ewaRequestDto.employmentId(), WorkSession.WorkSessionStatus.PAUSED)
-                .map(WorkSession::getEarnedAmount)
+        BigDecimal currentEarned = workSessionRepository
+                .findByEmploymentIdAndStatusNot(ewaRequestDto.employmentId(), WorkSession.WorkSessionStatus.COMPLETED)
+                .map(WorkSession::getCurrentEarnedAmount)
                 .orElse(BigDecimal.ZERO);
 
-        BigDecimal limitEwaAmount = payPeriod.getRemainingEwaLimitWith(pausedEarnedAmount);
+        BigDecimal limitEwaAmount = payPeriod.getRemainingEwaLimitWith(currentEarned);
 
         if (ewaRequestDto.requestAmount().compareTo(limitEwaAmount) > 0 ||
                 ewaRequestDto.requestAmount().compareTo(BigDecimal.ZERO) <= 0) {

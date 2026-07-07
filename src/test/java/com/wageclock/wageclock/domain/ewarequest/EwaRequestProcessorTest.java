@@ -64,7 +64,7 @@ public class EwaRequestProcessorTest {
         payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
         when(payPeriodRepository.findByEmploymentAndStatusWithLock(
                 1L, PayPeriod.PayPeriodStatus.ACTIVE)).thenReturn(Optional.of(payPeriod));
-        when(workSessionRepository.findByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.PAUSED))
+        when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
                 .thenReturn(Optional.empty());
         when(ewaRequestRepository.save(any())).thenReturn(ewaRequest);
         when(ewaRequest.getId()).thenReturn(1L);
