@@ -67,8 +67,12 @@ public class PayPeriodService {
 
     @Transactional
     public List<ClosePayPeriodResponse> bulkClosePayPeriods(List<Long> employmentIds, Long employerId) {
-        return payPeriodRepository.findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(employmentIds, employerId)
-                .stream()
+        List<PayPeriod> payPeriods = payPeriodRepository
+                .findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(employmentIds, employerId);
+        if (payPeriods.size() != employmentIds.size()) {
+            throw new UnauthorizedException("unauthorized");
+        }
+        return payPeriods.stream()
                 .map(pp -> {
                     Long employmentId = pp.getEmploymentId();
                     if (workSessionRepository.existsByEmploymentIdAndStatus(employmentId, WorkSession.WorkSessionStatus.WORKING)
