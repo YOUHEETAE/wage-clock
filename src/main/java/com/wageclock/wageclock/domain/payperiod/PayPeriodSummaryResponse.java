@@ -1,7 +1,12 @@
 package com.wageclock.wageclock.domain.payperiod;
 
-import java.math.BigDecimal;
+import com.wageclock.wageclock.domain.worksession.WorkSession;
 
-public record PayPeriodSummaryResponse (BigDecimal totalEarnedAmount, BigDecimal totalEwaAmount,
-                                        BigDecimal remainingEwaLimit){
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+public record PayPeriodSummaryResponse (Long employmentId, String workerName,
+                                        LocalDate periodStart, BigDecimal totalEarnedAmount,
+                                        BigDecimal totalEwaAmount, BigDecimal remainingEwaLimit,
+                                        WorkSession.WorkSessionStatus activeSessionStatus){
 }

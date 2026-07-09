@@ -90,5 +90,11 @@ public class PayPeriod extends BaseEntity {
     public String getEmployerName(){
         return employment.getEmployer().getName();
     }
+    public Long getEmploymentId() {
+        return employment.getId();
+    }
+    public String getWorkerName() {
+        return employment.getWorker().getName();
+    }
 
 }

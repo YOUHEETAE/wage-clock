@@ -68,18 +68,20 @@ public class WorkSessionServiceTest {
     @Test
     void clockIn_정상_응답_반환() {
         LocalDateTime now = LocalDateTime.now();
-        when(payPeriodRepository.findByEmploymentIdAndStatus(any(), any())).thenReturn(Optional.of(payPeriod));
+        when(payPeriodRepository.findByEmployment_IdAndStatus(any(), any())).thenReturn(Optional.of(payPeriod));
         when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
         when(workSessionRepository.existsByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.WORKING)).thenReturn(false);
         when(workSessionRepository.save(any())).thenReturn(savedWorkSession);
         when(savedWorkSession.getId()).thenReturn(10L);
         when(savedWorkSession.getClockIn()).thenReturn(now);
+        when(savedWorkSession.getHourlyWage()).thenReturn(java.math.BigDecimal.valueOf(10000));
 
         ClockInResponse response = workSessionService.clockIn(new ClockInRequest(1L), 1L);
 
         assertEquals(10L, response.sessionId());
         assertEquals(now, response.clockIn());
+        assertEquals(0, response.hourlyWage().compareTo(java.math.BigDecimal.valueOf(10000)));
     }
 
     @Test
@@ -116,7 +118,7 @@ public class WorkSessionServiceTest {
         when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
         when(workSessionRepository.existsByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.WORKING)).thenReturn(false);
-        when(payPeriodRepository.findByEmploymentIdAndStatus(any(), any())).thenReturn(Optional.empty());
+        when(payPeriodRepository.findByEmployment_IdAndStatus(any(), any())).thenReturn(Optional.empty());
         when(payPeriodRepository.save(any())).thenReturn(payPeriod);
         when(workSessionRepository.save(any())).thenReturn(savedWorkSession);
         when(savedWorkSession.getId()).thenReturn(10L);
