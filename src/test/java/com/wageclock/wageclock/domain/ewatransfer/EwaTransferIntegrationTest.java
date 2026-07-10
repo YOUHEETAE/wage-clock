@@ -110,7 +110,7 @@ public class EwaTransferIntegrationTest extends IntegrationTestBase {
                 new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
-        assertEquals(EwaRequest.EwaRequestStatus.PENDING, ewaRequest.getStatus());
+        assertEquals(EwaRequest.EwaRequestStatus.PROCESSING, ewaRequest.getStatus());
 
         EwaTransfer transfer = ewaTransferRepository.findAll().get(0);
         assertEquals(EwaTransfer.EwaTransferStatus.PENDING_INQUIRY, transfer.getStatus());
@@ -247,7 +247,7 @@ public class EwaTransferIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void OutBox_재이체_확정실패_FAILED_EwaRequest_APPROVED_유지() {
+    void OutBox_재이체_확정실패_FAILED_EwaRequest_FAILED() {
         when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenReturn(new WageTransferResult("1TX001", null, null));
@@ -265,7 +265,7 @@ public class EwaTransferIntegrationTest extends IntegrationTestBase {
         outBoxScheduler.processEwaTransferFailureOutBoxEvent();
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
-        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, ewaRequest.getStatus());
+        assertEquals(EwaRequest.EwaRequestStatus.FAILED, ewaRequest.getStatus());
 
         EwaTransfer transfer = ewaTransferRepository.findAll().get(0);
         assertEquals(EwaTransfer.EwaTransferStatus.FAILED, transfer.getStatus());
@@ -297,6 +297,6 @@ public class EwaTransferIntegrationTest extends IntegrationTestBase {
         assertEquals(EwaTransfer.EwaTransferStatus.UNKNOWN, transfer.getStatus());
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
-        assertEquals(EwaRequest.EwaRequestStatus.APPROVED, ewaRequest.getStatus());
+        assertEquals(EwaRequest.EwaRequestStatus.UNKNOWN, ewaRequest.getStatus());
     }
 }

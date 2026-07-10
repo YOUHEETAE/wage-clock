@@ -121,7 +121,7 @@ class EwaTransferProcessorTest {
     }
 
     @Test
-    void completeRetry_COMPLETED_PayPeriod_재차감() {
+    void completeRetry_COMPLETED_EwaRequest_승인_PayPeriod_금액추가() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         PayPeriod payPeriod = mock(PayPeriod.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
@@ -133,29 +133,33 @@ class EwaTransferProcessorTest {
         ewaTransferProcessor.completeRetry(1L);
 
         verify(ewaTransfer).completed();
+        verify(ewaRequest).approved();
         verify(payPeriod).addEwaAmount(BigDecimal.valueOf(50000));
-        verify(ewaRequest, never()).approved();
     }
 
     @Test
-    void retryFailed_EwaTransfer_FAILED_EwaRequest_미변경() {
+    void retryFailed_EwaTransfer_FAILED_EwaRequest_FAILED() {
+        EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
+        when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.failRetry(1L);
 
         verify(ewaTransfer).failed();
-        verify(ewaTransfer, never()).getEwaRequest();
+        verify(ewaRequest).failed();
     }
 
     @Test
-    void retryUnknown_EwaTransfer_UNKNOWN_EwaRequest_미변경() {
+    void retryUnknown_EwaTransfer_UNKNOWN_EwaRequest_UNKNOWN() {
+        EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
+        when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.unKnownRetry(1L);
 
         verify(ewaTransfer).unknown();
-        verify(ewaTransfer, never()).getEwaRequest();
+        verify(ewaRequest).unknown();
     }
 }

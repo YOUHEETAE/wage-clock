@@ -61,8 +61,8 @@ public class EwaRequestProcessor {
         return new EwaResponseDto(ewaRequest.getId(),
                 ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
     }
-    @Transactional
-    public EwaRequest validateAndLockEwa(Long ewaRequestId, Long employerId){
+
+    private EwaRequest validateAndLockEwa(Long ewaRequestId, Long employerId){
         EwaRequest ewaRequest = ewaRequestRepository.findByIdWithLock(ewaRequestId)
                 .orElseThrow(() -> new NotFoundException("Invalid request Id"));
         if(ewaRequest.getStatus() != EwaRequest.EwaRequestStatus.PENDING){
@@ -73,11 +73,19 @@ public class EwaRequestProcessor {
         }
         return ewaRequest;
     }
+
     @Transactional
-    public void processRejectEwa(EwaRequest ewaRequest){
+    public EwaResponseDto validateAndRejectEwa(Long ewaRequestId, Long employerId){
+        EwaRequest ewaRequest = validateAndLockEwa(ewaRequestId, employerId);
         ewaRequest.rejected();
-        ewaRequestRepository.save(ewaRequest);
         ewaRequest.getPayPeriod().subtractEwaAmount(ewaRequest.getRequestedAmount());
-        payPeriodRepository.save(ewaRequest.getPayPeriod());
+        return new EwaResponseDto(ewaRequest.getId(), ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
+    }
+
+    @Transactional
+    public EwaRequest validateAndMarkProcessing(Long ewaRequestId, Long employerId){
+        EwaRequest ewaRequest = validateAndLockEwa(ewaRequestId, employerId);
+        ewaRequest.processing();
+        return ewaRequest;
     }
 }
