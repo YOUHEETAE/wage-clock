@@ -101,7 +101,6 @@ Employer (고용주)
 ### 동시성
 
 - **Idempotency Key**: 네트워크 재시도로 인한 중복 요청 방지
-- **Redisson 분산 락**: 동일 워커의 동시 선지급 요청을 서버 인스턴스 간에 차단
 - **DB 비관적 락**: EWA 요청과 BulkSettlement 정산 간 PayPeriod 동시 수정 방지
 
 ### 외부 API
@@ -172,7 +171,6 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **ORM** | Spring Data JPA (Hibernate) |
 | **인증** | JWT |
 | **결제** | PortOne V2 (가상계좌 실연동) + Mock 송금 |
-| **분산 락** | Redis (Redisson) |
 | **인프라** | Docker, docker-compose, AWS EC2, Nginx |
 | **CI/CD** | GitHub Actions (CI: 테스트/빌드, CD: GHCR 푸시 + EC2 자동 배포) |
 | **빌드** | Gradle |
@@ -200,7 +198,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 3: JWT 인증 (회원가입 / 로그인)
 ✅ Phase 4: 근무 세션 API (출근 / 퇴근 / 일시정지 / 재개 / 급여 계산)
 ✅ Phase 5: 선지급 API (멱등성)
-✅ Phase 5.5: Redis 연동 (분산 락)
+✅ Phase 5.5: Redis 연동 (토큰 블랙리스트)
 ✅ Phase 6: PG 인터페이스 설계
 ✅ Phase 7: Payment History 설계
 ✅ Phase 8: PortOne 가상계좌 연동 (발급 + 웹훅 수신)

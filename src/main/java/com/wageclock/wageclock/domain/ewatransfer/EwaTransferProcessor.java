@@ -53,9 +53,6 @@ public class EwaTransferProcessor {
         ewaTransfer.markPendingInquiry();
     }
 
-
-
-
     @Transactional
     public void failTransfer(Long ewaTransferId){
         EwaTransfer ewaTransfer = ewaTransferRepository.findById(ewaTransferId)
@@ -63,6 +60,7 @@ public class EwaTransferProcessor {
         ewaTransfer.failed();
         ewaTransfer.getEwaRequest().failed();
     }
+
     @Transactional
     public void unknownTransfer(Long ewaTransferId){
         EwaTransfer ewaTransfer = ewaTransferRepository.findById(ewaTransferId)
@@ -89,6 +87,7 @@ public class EwaTransferProcessor {
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
         managed.completed();
         managed.getEwaRequest().getPayPeriod().addEwaAmount(managed.getAmount());
+        managed.getEwaRequest().approved();
     }
 
     @Transactional
@@ -96,6 +95,7 @@ public class EwaTransferProcessor {
         EwaTransfer managed = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
         managed.failed();
+        managed.getEwaRequest().failed();
     }
 
     @Transactional
@@ -103,9 +103,6 @@ public class EwaTransferProcessor {
         EwaTransfer managed = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
         managed.unknown();
+        managed.getEwaRequest().unknown();
     }
-
-
-
-
 }
