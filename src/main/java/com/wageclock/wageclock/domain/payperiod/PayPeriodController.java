@@ -25,8 +25,8 @@ public class PayPeriodController {
     @Operation(summary = "정산 기간 요약 조회 (진행 중 적립액/선지급액 실시간 반영)")
     @GetMapping("/{employmentId}/summary")
     public PayPeriodSummaryResponse getSummary(@PathVariable Long employmentId,
-            @AuthenticationPrincipal Long callerId){
-        return payPeriodService.getPayPeriodSummaryResponse(employmentId, callerId);
+            @AuthenticationPrincipal Long workerId){
+        return payPeriodService.getPayPeriodSummaryResponse(employmentId, workerId);
     }
 
     @Operation(summary = "사업장 전체 정산 요약 목록 조회 (고용주)")

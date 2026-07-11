@@ -112,7 +112,6 @@ public class PayPeriodServiceTest {
         when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
                 .thenReturn(Optional.of(payPeriod));
         when(payPeriod.getWorkerId()).thenReturn(2L);
-        when(payPeriod.getEmployerId()).thenReturn(2L);
         assertThrows(UnauthorizedException.class, () -> payPeriodService.getPayPeriodSummaryResponse(1L, 1L));
     }
 
@@ -120,8 +119,6 @@ public class PayPeriodServiceTest {
     void summary_현재_세션_없을_때_정상_조회() {
         when(employment.getWorkerId()).thenReturn(1L);
         when(employment.getId()).thenReturn(1L);
-        when(employment.getEmployer()).thenReturn(employer);
-        when(employer.getId()).thenReturn(2L);
         when(employment.getWorker()).thenReturn(worker);
         when(worker.getName()).thenReturn("박사원");
         PayPeriod realPayPeriod = new PayPeriod(employment);
@@ -144,8 +141,6 @@ public class PayPeriodServiceTest {
     void summary_현재_세션_있을_때_currentEarned_반영() {
         when(employment.getWorkerId()).thenReturn(1L);
         when(employment.getId()).thenReturn(1L);
-        when(employment.getEmployer()).thenReturn(employer);
-        when(employer.getId()).thenReturn(2L);
         when(employment.getWorker()).thenReturn(worker);
         when(worker.getName()).thenReturn("박사원");
         PayPeriod realPayPeriod = new PayPeriod(employment);
