@@ -48,12 +48,10 @@ public class PayPeriodService {
                 payPeriod.getActualPayAmount());
     }
     @Transactional(readOnly = true)
-    public PayPeriodSummaryResponse getPayPeriodSummaryResponse(Long employmentId ,Long callerId){
+    public PayPeriodSummaryResponse getPayPeriodSummaryResponse(Long employmentId, Long workerId){
         PayPeriod payPeriod = payPeriodRepository.findByEmployment_IdAndStatus(employmentId, PayPeriod.PayPeriodStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Worker not found"));
-        if(!payPeriod.getEmployerId().equals(callerId) && !payPeriod.getWorkerId().equals(callerId)){
-            throw new UnauthorizedException("unauthorized");
-        }
+        if (!payPeriod.getWorkerId().equals(workerId)) throw new UnauthorizedException("unauthorized");
         java.util.Optional<WorkSession> activeSession = workSessionRepository
                 .findByEmploymentIdAndStatusNot(employmentId, WorkSession.WorkSessionStatus.COMPLETED);
         BigDecimal currentEarned = activeSession.map(WorkSession::getCurrentEarnedAmount).orElse(BigDecimal.ZERO);

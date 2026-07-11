@@ -1,6 +1,8 @@
 package com.wageclock.wageclock.domain.history;
 
+import com.wageclock.wageclock.domain.auth.UserRole;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,8 +19,10 @@ public class HistoryController {
     @GetMapping("/{employmentId}")
     public HistoryResponse getHistories(@PathVariable Long employmentId,
                                         @AuthenticationPrincipal Long callerId,
+                                        Authentication authentication,
                                         @RequestParam(required = false) String after,
                                         @RequestParam(defaultValue = "20") int size){
-        return historyService.getHistories(employmentId, callerId, after, size);
+        UserRole role = UserRole.valueOf(authentication.getAuthorities().iterator().next().getAuthority());
+        return historyService.getHistories(employmentId, callerId, role, after, size);
     }
 }

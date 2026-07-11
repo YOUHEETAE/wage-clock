@@ -3,15 +3,19 @@ package com.wageclock.wageclock.domain.ewarequest;
 import com.wageclock.wageclock.domain.ewatransfer.EwaTransferService;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class EwaRequestService {
 
     private final EwaRequestProcessor ewaRequestProcessor;
     private final EwaTransferService ewaTransferService;
+    private final EwaRequestRepository ewaRequestRepository;
 
-    public EwaRequestService(EwaRequestProcessor ewaRequestProcessor, EwaTransferService ewaTransferService) {
+    public EwaRequestService(EwaRequestProcessor ewaRequestProcessor, EwaTransferService ewaTransferService, EwaRequestRepository ewaRequestRepository) {
         this.ewaRequestProcessor = ewaRequestProcessor;
         this.ewaTransferService = ewaTransferService;
+        this.ewaRequestRepository = ewaRequestRepository;
     }
 
     public EwaResponseDto requestEwa(EwaRequestDto ewaRequestDto, Long workerId){
@@ -26,5 +30,8 @@ public class EwaRequestService {
 
     public EwaResponseDto rejectEwa(Long ewaRequestId, Long employerId){
         return ewaRequestProcessor.validateAndRejectEwa(ewaRequestId, employerId);
+    }
+    public List<PendingEwaResponse> getPendingEwaRequests(Long workplaceId, Long employerId){
+        return ewaRequestRepository.findPendingByWorkplace(workplaceId, employerId);
     }
 }

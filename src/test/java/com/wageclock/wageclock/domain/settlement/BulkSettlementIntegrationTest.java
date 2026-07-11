@@ -40,12 +40,12 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        signUp("김사장", "employer@test.com", UserRole.EMPLOYER);
-        signUp("박사원", "worker@test.com", UserRole.WORKER);
-        employerToken = login("employer@test.com");
-        workerToken = login("worker@test.com");
+        signUp("김사장", "employer@bulk-test.com", UserRole.EMPLOYER);
+        signUp("박사원", "worker@bulk-test.com", UserRole.WORKER);
+        employerToken = login("employer@bulk-test.com");
+        workerToken = login("worker@bulk-test.com");
         workplaceId = createWorkplace("테스트 사업장", employerToken);
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
+        employmentId = createEmployment("worker@bulk-test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
         Thread.sleep(2000);
         clockOut(sessionId, workerToken);

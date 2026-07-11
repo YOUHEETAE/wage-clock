@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/ewa-requests")
 public class EwaRequestController {
@@ -30,5 +32,11 @@ public class EwaRequestController {
     public EwaResponseDto reject(@PathVariable Long ewaRequestId,
                                  @AuthenticationPrincipal Long employerId) {
         return ewaRequestService.rejectEwa(ewaRequestId, employerId);
+    }
+    @Operation(summary = "승인 대기 중인 선지급 요청 목록")
+    @GetMapping("/pending")
+    public List<PendingEwaResponse> getPendingEwaRequests(@RequestParam Long workplaceId,
+                                                      @AuthenticationPrincipal Long employerId) {
+        return ewaRequestService.getPendingEwaRequests(workplaceId, employerId);
     }
 }
