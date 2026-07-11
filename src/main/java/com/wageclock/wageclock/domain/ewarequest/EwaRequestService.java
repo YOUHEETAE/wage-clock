@@ -34,4 +34,8 @@ public class EwaRequestService {
     public List<PendingEwaResponse> getPendingEwaRequests(Long workplaceId, Long employerId){
         return ewaRequestRepository.findPendingByWorkplace(workplaceId, employerId);
     }
+
+    public List<EwaRequestDetailResponse> getMyRequests(Long employmentId, Long workerId){
+        return ewaRequestRepository.findDetailsByEmploymentId(employmentId, workerId);
+    }
 }
