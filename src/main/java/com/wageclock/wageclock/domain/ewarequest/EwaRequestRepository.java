@@ -19,12 +19,18 @@ public interface EwaRequestRepository extends JpaRepository<EwaRequest, Long> {
     @Query("SELECT e FROM EwaRequest e WHERE e.id = :id")
     Optional<EwaRequest> findByIdWithLock(@Param("id") Long id);
 
-    @Query("SELECT new com.wageclock.wageclock.domain.ewarequest.PendingEwaResponse(e.id, w.name, e.requestedAmount, e.createdAt) " +
+    @Query("SELECT new com.wageclock.wageclock.domain.ewarequest.PendingEwaResponse(e.id, em.id, w.name, e.requestedAmount, e.createdAt) " +
             "FROM EwaRequest e " +
             "JOIN e.payPeriod pp " +
             "JOIN pp.employment em " +
             "JOIN em.worker w " +
             "WHERE em.workplace.id = :workplaceId AND em.employer.id = :employerId AND e.status = 'PENDING'")
     List<PendingEwaResponse> findPendingByWorkplace(@Param("workplaceId") Long workplaceId, @Param("employerId") Long employerId);
+
+    @Query("SELECT new com.wageclock.wageclock.domain.ewarequest.EwaRequestDetailResponse(e.id, e.requestedAmount, e.status, e.createdAt, e.updatedAt) " +
+            "FROM EwaRequest e " +
+            "JOIN e.payPeriod pp " +
+            "WHERE pp.employment.id = :employmentId AND pp.employment.worker.id = :workerId AND pp.status = 'ACTIVE'")
+    List<EwaRequestDetailResponse> findDetailsByEmploymentId(@Param("employmentId") Long employmentId, @Param("workerId") Long workerId);
 
 }

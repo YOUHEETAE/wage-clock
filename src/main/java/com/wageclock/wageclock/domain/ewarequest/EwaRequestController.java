@@ -39,4 +39,11 @@ public class EwaRequestController {
                                                       @AuthenticationPrincipal Long employerId) {
         return ewaRequestService.getPendingEwaRequests(workplaceId, employerId);
     }
+
+    @Operation(summary = "내 선지급 요청 현황 조회 (근로자용 폴링)")
+    @GetMapping("/my-requests")
+    public List<EwaRequestDetailResponse> getMyRequests(@RequestParam Long employmentId,
+                                                        @AuthenticationPrincipal Long workerId) {
+        return ewaRequestService.getMyRequests(employmentId, workerId);
+    }
 }

@@ -225,6 +225,7 @@ public class EwaIntegrationTest extends IntegrationTestBase {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(2, response.getBody().length);
         assertEquals("박사원", response.getBody()[0].workerName());
+        assertEquals(employmentId, response.getBody()[0].employmentId());
     }
 
     @Test
@@ -255,6 +256,38 @@ public class EwaIntegrationTest extends IntegrationTestBase {
                 org.springframework.http.HttpMethod.GET,
                 new HttpEntity<>(authHeaders(employerToken)),
                 PendingEwaResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(0, response.getBody().length);
+    }
+
+    @Test
+    void 내_요청_현황_조회() {
+        requestEwa(BigDecimal.valueOf(100));
+        requestEwa(BigDecimal.valueOf(200));
+
+        ResponseEntity<EwaRequestDetailResponse[]> response = testRestTemplate.exchange(
+                "/api/ewa-requests/my-requests?employmentId=" + employmentId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(authHeaders(workerToken)),
+                EwaRequestDetailResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(2, response.getBody().length);
+        assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.getBody()[0].status());
+    }
+
+    @Test
+    void 다른_워커_조회_불가() {
+        requestEwa(BigDecimal.valueOf(100));
+        signUp("다른직원", "other-worker@ewa-test.com", UserRole.WORKER);
+        String otherWorkerToken = login("other-worker@ewa-test.com");
+
+        ResponseEntity<EwaRequestDetailResponse[]> response = testRestTemplate.exchange(
+                "/api/ewa-requests/my-requests?employmentId=" + employmentId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(authHeaders(otherWorkerToken)),
+                EwaRequestDetailResponse[].class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(0, response.getBody().length);
