@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.ewarequest;
 
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -14,6 +15,8 @@ import java.util.Optional;
 public interface EwaRequestRepository extends JpaRepository<EwaRequest, Long> {
 
     boolean existsByIdempotencyKey(String idempotencyKey);
+
+    boolean existsByPayPeriodAndStatusIn(PayPeriod payPeriod, List<EwaRequest.EwaRequestStatus> statuses);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM EwaRequest e WHERE e.id = :id")

@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.ewarequest;
 
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import java.util.List;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
@@ -44,6 +45,11 @@ public class EwaRequestProcessor {
         if (ewaRequestDto.requestAmount().compareTo(limitEwaAmount) > 0 ||
                 ewaRequestDto.requestAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Invalid request amount");
+        }
+
+        if (ewaRequestRepository.existsByPayPeriodAndStatusIn(payPeriod,
+                List.of(EwaRequest.EwaRequestStatus.PENDING, EwaRequest.EwaRequestStatus.PROCESSING))) {
+            throw new IllegalStateException("이미 처리 중인 선지급 요청이 있습니다");
         }
 
         if (ewaRequestRepository.existsByIdempotencyKey(ewaRequestDto.idempotencyKey())) {
