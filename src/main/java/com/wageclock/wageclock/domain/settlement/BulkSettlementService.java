@@ -153,8 +153,8 @@ public class BulkSettlementService {
             messageNo = issueTransferMessageNo(context);
         }catch (Exception e){
             log.error("messageNo 발급/저장 실패 itemId={}", context.itemId(), e);
+            //todo : 아웃박스 재시도 소진(MAX_RETRY 초과 → FAILED) 시 운영팀 알림 필요
             return new TransferItemResult.Retryable(context.itemId());
-            //todo: 일정 횟수 이상 반복되면 운영팀 알림 필요 (MAX_RETRY 미구현)
         }
         WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), messageNo);
         return toTransferItemResult(result, context);

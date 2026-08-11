@@ -52,6 +52,7 @@ public class InterBankFailureOutBoxProcessor {
             }
             case PENDING_INQUIRY -> bulkSettlementProcessor.markPendingInquiry(bulkSettlementItem.getId());
             case FAILURE -> {
+                //todo : 확정 실패시 알림 발송 필요
                 bulkSettlementProcessor.failItem(bulkSettlementItem.getId());
                 event.failed();
                 interBankFailureOutBoxEventRepository.save(event);

@@ -54,6 +54,7 @@ public class EwaTransferFailureOutBoxProcessor {
                 ewaTransferFailureOutBoxRepository.save(event);
             }
             case FAILURE -> {
+                //todo : 확정 실패시 알림 발송 필요
                 ewaTransferProcessor.failRetry(ewaTransfer.getId());
                 event.failed();
                 ewaTransferFailureOutBoxRepository.save(event);

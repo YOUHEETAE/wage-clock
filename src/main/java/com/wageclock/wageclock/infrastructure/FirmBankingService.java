@@ -45,7 +45,8 @@ public class FirmBankingService {
         );
 
         // TODO: 실제 연동 시 TCP 소켓으로 교체 (핵토파이낸셜 2000/100 전문)
-        // 타행이체 정상응답 후 3000/100(타행이체불능통지) 수신 처리 필요
+        // 정상응답 후 오는 3000/100(타행이체불능통지)은 MockFirmBankingSocketListener가
+        // HTTP로 대체 수신 중 — 실연동 시 소켓 수신 + 응답전문 회신으로 교체 필요
         return send(request);
     }
 

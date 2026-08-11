@@ -226,6 +226,52 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 
 ---
 
+## 구현 범위
+
+실서비스가 아니므로 일부는 의도적으로 범위에서 제외했다.
+"몰라서 안 한 것"과 구분하기 위해, 제외한 이유와 실제로 붙일 때 손댈 지점을 함께 남긴다.
+코드에는 해당 위치마다 `todo` 주석이 있다.
+
+### 실패 알림
+
+이체가 확정 실패해도 알림을 보내지 않는다. 상태 전이와 로그만 남아 근로자도 운영자도 모른다.
+확정 실패는 두 경로에서 발생한다.
+
+- **즉시 실패** — `classify()`가 `FAILURE`로 분기하는 지점
+  (`EwaTransferService`, `BulkSettlementService`, 두 OutBoxProcessor의 `applyResult`)
+- **재시도 소진** — 아웃박스 `MAX_RETRY`(5) 초과로 `FAILED` 전이하는 지점
+  (두 OutBoxProcessor의 `handleRetryOrFail` / `handlePrepareRetryOrFail`)
+
+### 펌뱅킹 실연동
+
+헥토파이낸셜 송금은 Mock이다 (`hectofinancial.mock=true` → `MockWageTransferAdapter`).
+실연동 시 `FirmBankingService`의 HTTP 스텁을 TCP 소켓 전문 처리로 교체해야 한다.
+
+- 2000/100 (타행이체), 7000/100 (이체결과조회)
+- 3000/100 (타행이체불능통지) — 현재는 `MockFirmBankingSocketListener`가 HTTP로 대체 수신 중.
+  실연동 시 소켓 수신 + 응답전문 회신 필요
+
+PortOne 가상계좌는 실연동 상태다 (테스트 상점).
+
+### 정산 명세서
+
+백엔드 API는 구현했고 프론트엔드 화면은 만들지 않았다. 실서비스라면 다음이 더 필요하다.
+
+- 원천징수·4대보험 공제 내역, 연장/야간 가산수당 등 법정 항목
+- 명세서 PDF 출력 및 발급 이력 보관 (근로기준법상 임금명세서 교부 의무)
+- 정산 확정 시점 스냅샷 저장 (현재는 조회할 때마다 계산)
+
+### EWA 거절/실패 사유
+
+상태값(`REJECTED`/`FAILED`)만 저장하고 사유는 남기지 않는다. 근로자가 왜 거절·실패했는지
+알 수 없으므로 실서비스라면 필요하다. `EwaRequest`에 사유 필드를 추가한 뒤,
+
+- **거절** — `EwaRequestProcessor.validateAndRejectEwa()`가 사유를 받지 않으므로 입력 경로 추가
+- **실패** — 사유가 `WageTransferResult.failureReason`에 담겨 오지만 아웃박스 프로세서가
+  `classify()` 결과만 보고 상태 전이를 호출해 유실된다. 전달 경로를 이어야 한다.
+
+---
+
 ## 수익 모델
 
 ```
