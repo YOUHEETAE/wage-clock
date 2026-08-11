@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,10 +54,14 @@ public class EwaIntegrationTest extends IntegrationTestBase {
     }
 
     private Long requestEwa(BigDecimal amount) {
-        EwaRequestDto requestDto = new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString());
+        return requestEwa(employmentId, workerToken, amount);
+    }
+
+    private Long requestEwa(Long targetEmploymentId, String token, BigDecimal amount) {
+        EwaRequestDto requestDto = new EwaRequestDto(targetEmploymentId, amount, UUID.randomUUID().toString());
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
                 "/api/ewa-requests/request",
-                new HttpEntity<>(requestDto, authHeaders(workerToken)),
+                new HttpEntity<>(requestDto, authHeaders(token)),
                 EwaResponseDto.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         return response.getBody().ewaRequestId();
@@ -212,9 +217,17 @@ public class EwaIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void 펜딩_EWA_목록_조회() {
+    void 펜딩_EWA_목록_조회() throws InterruptedException {
+        // 한 PayPeriod에 PENDING 요청은 하나만 존재할 수 있으므로 같은 사업장에 직원을 하나 더 둔다
+        signUp("이사원", "worker2@ewa-test.com", UserRole.WORKER);
+        String worker2Token = login("worker2@ewa-test.com");
+        Long employment2Id = createEmployment("worker2@ewa-test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
+        Long session2Id = clockIn(employment2Id, worker2Token);
+        Thread.sleep(2000);
+        clockOut(session2Id, worker2Token);
+
         requestEwa(BigDecimal.valueOf(100));
-        requestEwa(BigDecimal.valueOf(100));
+        requestEwa(employment2Id, worker2Token, BigDecimal.valueOf(100));
 
         ResponseEntity<PendingEwaResponse[]> response = testRestTemplate.exchange(
                 "/api/ewa-requests/pending?workplaceId=" + workplaceId,
@@ -224,8 +237,13 @@ public class EwaIntegrationTest extends IntegrationTestBase {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(2, response.getBody().length);
-        assertEquals("박사원", response.getBody()[0].workerName());
-        assertEquals(employmentId, response.getBody()[0].employmentId());
+        // 쿼리에 ORDER BY가 없어 순서를 보장하지 않으므로 포함 여부로 검증한다
+        List<String> workerNames = Arrays.stream(response.getBody())
+                .map(PendingEwaResponse::workerName).toList();
+        List<Long> employmentIds = Arrays.stream(response.getBody())
+                .map(PendingEwaResponse::employmentId).toList();
+        assertTrue(workerNames.containsAll(List.of("박사원", "이사원")));
+        assertTrue(employmentIds.containsAll(List.of(employmentId, employment2Id)));
     }
 
     @Test
@@ -263,7 +281,10 @@ public class EwaIntegrationTest extends IntegrationTestBase {
 
     @Test
     void 내_요청_현황_조회() {
-        requestEwa(BigDecimal.valueOf(100));
+        // PENDING 상태에서는 추가 요청이 막히므로 첫 건을 거절해 상태를 비운 뒤 재요청한다
+        Long firstEwaId = requestEwa(BigDecimal.valueOf(100));
+        testRestTemplate.postForEntity("/api/ewa-requests/" + firstEwaId + "/reject",
+                new HttpEntity<>(null, authHeaders(employerToken)), Void.class);
         requestEwa(BigDecimal.valueOf(200));
 
         ResponseEntity<EwaRequestDetailResponse[]> response = testRestTemplate.exchange(
@@ -274,7 +295,11 @@ public class EwaIntegrationTest extends IntegrationTestBase {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(2, response.getBody().length);
-        assertEquals(EwaRequest.EwaRequestStatus.PENDING, response.getBody()[0].status());
+        // 쿼리에 ORDER BY가 없어 순서를 보장하지 않으므로 포함 여부로 검증한다
+        List<EwaRequest.EwaRequestStatus> statuses = Arrays.stream(response.getBody())
+                .map(EwaRequestDetailResponse::status).toList();
+        assertTrue(statuses.contains(EwaRequest.EwaRequestStatus.PENDING));
+        assertTrue(statuses.contains(EwaRequest.EwaRequestStatus.REJECTED));
     }
 
     @Test
