@@ -19,16 +19,12 @@ public interface PayPeriodRepository extends JpaRepository<PayPeriod, Long> {
     Optional<PayPeriod> findByEmploymentAndStatusWithLock(@Param("employmentId") Long employmentId,
                                                           @Param("status") PayPeriod.PayPeriodStatus status);
 
+    // ORDER BY 필수 — 여러 행을 잠그므로 획득 순서가 고정되지 않으면
+    // 일괄 마감끼리 서로 반대 순서로 잠가 데드락이 난다
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT p FROM PayPeriod p WHERE p.employment.id IN :employmentIds AND p.employment.employer.id = :employerId AND p.status = 'ACTIVE'")
+    @Query("SELECT p FROM PayPeriod p WHERE p.employment.id IN :employmentIds AND p.employment.employer.id = :employerId AND p.status = 'ACTIVE' ORDER BY p.id")
     List<PayPeriod> findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(
             @Param("employmentIds") List<Long> employmentIds,
             @Param("employerId") Long employerId);
-
-    @Query("SELECT p FROM PayPeriod p WHERE p.employment.workplace.id = :workplaceId AND p.employment.employer.id = :employerId AND p.status = 'ACTIVE'")
-    List<PayPeriod> findAllByWorkplaceIdAndEmployerIdAndStatusActive(
-            @Param("workplaceId") Long workplaceId,
-            @Param("employerId") Long employerId);
-
 
 }
