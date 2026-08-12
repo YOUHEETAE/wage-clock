@@ -43,7 +43,6 @@ public class EwaTransferProcessor {
                 .orElseThrow(() -> new NotFoundException("Transfer not found"));
         ewaTransfer.completed();
         ewaTransfer.getEwaRequest().approved();
-        ewaTransfer.getEwaRequest().getPayPeriod().addEwaAmount(ewaTransfer.getAmount());
     }
 
     @Transactional
@@ -59,6 +58,8 @@ public class EwaTransferProcessor {
                 .orElseThrow(() -> new NotFoundException("Transfer not found"));
         ewaTransfer.failed();
         ewaTransfer.getEwaRequest().failed();
+        // 요청 시점에 잡아둔 한도를 되돌린다 (이체가 나가지 않았음이 확정됨)
+        ewaTransfer.getEwaRequest().refundEwa(ewaTransfer.getAmount());
     }
 
     @Transactional
@@ -72,8 +73,10 @@ public class EwaTransferProcessor {
     public void receiveInterBankFailure(String transferId){
         EwaTransfer ewaTransfer = ewaTransferRepository.findByMessageNo(transferId)
                 .orElseThrow(() -> new NotFoundException("ewaTransfer not found"));
+        // RETRYING은 아직 미확정이므로 한도를 되돌리지 않는다.
+        // 여기서 되돌리면 재시도 성공 시 다시 더해야 하고, 그러면 최초 성공 경로와
+        // 재시도 성공 경로가 completeTransfer를 공유하면서 한쪽이 반드시 틀어진다.
         ewaTransfer.retrying();
-        ewaTransfer.getEwaRequest().refundEwa(ewaTransfer.getAmount());
         EwaTransferFailureOutBoxEvent event = EwaTransferFailureOutBoxEvent.builder()
                 .ewaTransferId(ewaTransfer.getId())
                 .messageNo(transferId)
@@ -86,7 +89,6 @@ public class EwaTransferProcessor {
         EwaTransfer managed = ewaTransferRepository.findById(ewaTransferId)
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
         managed.completed();
-        managed.getEwaRequest().getPayPeriod().addEwaAmount(managed.getAmount());
         managed.getEwaRequest().approved();
     }
 
@@ -96,6 +98,9 @@ public class EwaTransferProcessor {
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
         managed.failed();
         managed.getEwaRequest().failed();
+        // 요청 시점에 잡아둔 한도를 되돌린다.
+        // 아웃박스가 FAILED 상태를 조기 종료 처리하므로 중복 차감되지 않는다.
+        managed.getEwaRequest().refundEwa(managed.getAmount());
     }
 
     @Transactional

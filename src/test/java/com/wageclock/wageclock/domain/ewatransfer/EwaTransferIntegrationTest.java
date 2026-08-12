@@ -8,6 +8,7 @@ import com.wageclock.wageclock.domain.ewarequest.InitiateEwaResponse;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
 import com.wageclock.wageclock.domain.outbox.OutBoxScheduler;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
 import com.wageclock.wageclock.infrastructure.InterBankFailureNotification;
 import com.wageclock.wageclock.support.IntegrationTestBase;
@@ -74,6 +75,20 @@ public class EwaTransferIntegrationTest extends IntegrationTestBase {
                 new HttpEntity<>(null, authHeaders(employerToken)),
                 InitiateEwaResponse.class);
         return ewaTransferRepository.findAll().get(0).getId();
+    }
+
+    private void receiveInterBankFailure(String messageNo) {
+        testRestTemplate.postForEntity(
+                "/mock/firm-banking/3000",
+                new HttpEntity<>(new InterBankFailureNotification(messageNo), new HttpHeaders()),
+                Void.class);
+    }
+
+    private BigDecimal totalEwaAmount() {
+        return payPeriodRepository
+                .findByEmployment_IdAndStatus(employmentId, PayPeriod.PayPeriodStatus.ACTIVE)
+                .orElseThrow()
+                .getTotalEwaAmount();
     }
 
     // ─── 정상 이체 ───────────────────────────────────────────────────────────────
@@ -298,5 +313,120 @@ public class EwaTransferIntegrationTest extends IntegrationTestBase {
 
         EwaRequest ewaRequest = ewaRequestRepository.findById(ewaId).get();
         assertEquals(EwaRequest.EwaRequestStatus.UNKNOWN, ewaRequest.getStatus());
+    }
+
+    // ─── 선지급 누적액 계상 ───────────────────────────────────────────────────────
+    // 규칙: 요청 시점에 한 번 더하고, 확정 실패일 때만 뺀다.
+    // 성공·미확정 구간에서는 건드리지 않는다. (PayPeriod.addEwaAmount 참고)
+
+    @Test
+    void 이체_성공_선지급액은_요청시점_한번만_계상() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult("1TX001", null, null));
+
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(totalEwaAmount()), "요청 시점에 계상된다");
+
+        initiateEwa(ewaId);
+
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(totalEwaAmount()), "성공해도 다시 더하지 않는다");
+    }
+
+    @Test
+    void 이체_확정실패_선지급액_환원() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult(null, null, "E021"));
+
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
+
+        assertEquals(EwaRequest.EwaRequestStatus.FAILED,
+                ewaRequestRepository.findById(ewaId).get().getStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(totalEwaAmount()));
+    }
+
+    @Test
+    void 이체_UNKNOWN_선지급액_유지() {
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenThrow(new RuntimeException("네트워크 오류"));
+
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
+
+        assertEquals(EwaRequest.EwaRequestStatus.UNKNOWN,
+                ewaRequestRepository.findById(ewaId).get().getStatus());
+        // 돈이 나갔는지 모르므로 한도를 계속 잡아둔다
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(totalEwaAmount()));
+    }
+
+    @Test
+    void 불능통지_재시도_성공_선지급액_변화없음() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult("1TX001", null, null));
+
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        initiateEwa(ewaId);
+        receiveInterBankFailure("1TX001");
+
+        // RETRYING은 미확정이므로 한도를 되돌리지 않는다
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(totalEwaAmount()));
+
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX002");
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult("1TX002", null, null));
+        outBoxScheduler.processEwaTransferFailureOutBoxEvent();
+
+        assertEquals(EwaTransfer.EwaTransferStatus.COMPLETED,
+                ewaTransferRepository.findAll().get(0).getStatus());
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(totalEwaAmount()));
+    }
+
+    @Test
+    void 불능통지_재시도_확정실패_선지급액_환원() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult("1TX001", null, null));
+
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        initiateEwa(ewaId);
+        receiveInterBankFailure("1TX001");
+
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult(null, null, "계좌 없음"));
+        outBoxScheduler.processEwaTransferFailureOutBoxEvent();
+
+        assertEquals(EwaRequest.EwaRequestStatus.FAILED,
+                ewaRequestRepository.findById(ewaId).get().getStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(totalEwaAmount()));
+    }
+
+    @Test
+    void 재시도_소진_선지급액_환원() {
+        when(wageTransferPort.prepareTransfer(any())).thenReturn("1TX001");
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult("1TX001", null, null));
+
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        initiateEwa(ewaId);
+        receiveInterBankFailure("1TX001");
+
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenThrow(new RuntimeException("재이체 실패"));
+        when(wageTransferPort.inquireTransfer(any()))
+                .thenThrow(new RuntimeException("조회 실패"));
+        for (int i = 0; i < 5; i++) {
+            outBoxScheduler.processEwaTransferFailureOutBoxEvent();
+        }
+
+        EwaTransferFailureOutBoxEvent event = ewaTransferFailureOutBoxRepository.findAll().get(0);
+        assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.FAILED, event.getStatus());
+        assertEquals(EwaRequest.EwaRequestStatus.FAILED,
+                ewaRequestRepository.findById(ewaId).get().getStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(totalEwaAmount()));
     }
 }
