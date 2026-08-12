@@ -3,7 +3,6 @@ package com.wageclock.wageclock.domain.ewatransfer;
 import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
-import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -48,20 +47,19 @@ class EwaTransferProcessorTest {
     }
 
     @Test
-    void completed_COMPLETED_EwaRequest_승인_PayPeriod_금액추가() {
+    void completeTransfer_COMPLETED_승인_금액은_건드리지_않음() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
-        PayPeriod payPeriod = mock(PayPeriod.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
-        when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
-        when(ewaRequest.getPayPeriod()).thenReturn(payPeriod);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.completeTransfer(1L);
 
         verify(ewaTransfer).completed();
         verify(ewaRequest).approved();
-        verify(payPeriod).addEwaAmount(BigDecimal.valueOf(50000));
+        // 요청 시점에 이미 더해졌으므로 성공 시에는 금액을 건드리지 않는다
+        verify(ewaRequest, never()).getPayPeriod();
+        verify(ewaRequest, never()).refundEwa(any());
     }
 
     @Test
@@ -75,16 +73,18 @@ class EwaTransferProcessorTest {
     }
 
     @Test
-    void failed_FAILED_EwaRequest_failed_호출() {
+    void failTransfer_FAILED_한도_환원() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
+        when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.failTransfer(1L);
 
         verify(ewaTransfer).failed();
         verify(ewaRequest).failed();
+        verify(ewaRequest).refundEwa(BigDecimal.valueOf(50000));
     }
 
     @Test
@@ -101,18 +101,17 @@ class EwaTransferProcessorTest {
     }
 
     @Test
-    void receiveInterBankFailure_RETRYING_금액환원_OutBox_이벤트_저장() {
-        EwaRequest ewaRequest = mock(EwaRequest.class);
+    void receiveInterBankFailure_RETRYING_한도유지_OutBox_이벤트_저장() {
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getId()).thenReturn(1L);
         when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
-        when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
         when(ewaTransferRepository.findByMessageNo("TX-001")).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.receiveInterBankFailure("TX-001");
 
         verify(ewaTransfer).retrying();
-        verify(ewaRequest).refundEwa(BigDecimal.valueOf(50000));
+        // RETRYING은 미확정이므로 한도를 되돌리지 않는다 (EwaRequest에 접근조차 하지 않음)
+        verify(ewaTransfer, never()).getEwaRequest();
         ArgumentCaptor<EwaTransferFailureOutBoxEvent> captor = ArgumentCaptor.captor();
         verify(ewaTransferFailureOutBoxRepository).save(captor.capture());
         assertEquals("TX-001", captor.getValue().getMessageNo());
@@ -121,33 +120,34 @@ class EwaTransferProcessorTest {
     }
 
     @Test
-    void completeRetry_COMPLETED_EwaRequest_승인_PayPeriod_금액추가() {
+    void completeRetry_COMPLETED_승인_금액은_건드리지_않음() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
-        PayPeriod payPeriod = mock(PayPeriod.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
-        when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
-        when(ewaRequest.getPayPeriod()).thenReturn(payPeriod);
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.completeRetry(1L);
 
         verify(ewaTransfer).completed();
         verify(ewaRequest).approved();
-        verify(payPeriod).addEwaAmount(BigDecimal.valueOf(50000));
+        // 불능통지에서 되돌리지 않았으므로 재시도 성공 시에도 다시 더하지 않는다
+        verify(ewaRequest, never()).getPayPeriod();
+        verify(ewaRequest, never()).refundEwa(any());
     }
 
     @Test
-    void retryFailed_EwaTransfer_FAILED_EwaRequest_FAILED() {
+    void failRetry_FAILED_한도_환원() {
         EwaRequest ewaRequest = mock(EwaRequest.class);
         EwaTransfer ewaTransfer = mock(EwaTransfer.class);
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
+        when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
         ewaTransferProcessor.failRetry(1L);
 
         verify(ewaTransfer).failed();
         verify(ewaRequest).failed();
+        verify(ewaRequest).refundEwa(BigDecimal.valueOf(50000));
     }
 
     @Test

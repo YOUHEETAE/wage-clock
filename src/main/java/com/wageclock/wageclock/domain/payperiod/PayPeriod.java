@@ -66,6 +66,20 @@ public class PayPeriod extends BaseEntity {
     public void addEarnedAmount(BigDecimal amount) {
         this.totalEarnedAmount = this.totalEarnedAmount.add(amount);
     }
+    /**
+     * 선지급 누적액 계상 규칙 — 요청 시점에 한 번 더하고, 확정 실패일 때만 뺀다.
+     * 성공과 미확정 구간에서는 건드리지 않는다.
+     *
+     *   요청           + amount   EwaRequestProcessor.processEwaRequest
+     *   거절           - amount   EwaRequestProcessor.validateAndRejectEwa
+     *   이체 실패 확정   - amount   EwaTransferProcessor.failTransfer / failRetry
+     *   이체 성공         -        (요청 시점에 이미 반영됨)
+     *   불능통지·UNKNOWN  -        (미확정이므로 한도를 계속 잡아둔다)
+     *
+     * 요청 시점에 잡아두는 이유는 승인 대기와 이체 진행 중에도 한도가 소진된
+     * 것으로 보여야 하기 때문이다. 성공 시점에 더하면 결과를 모르는 구간에
+     * 한도가 비어 근로자가 한도를 초과해 요청할 수 있다.
+     */
     public void addEwaAmount(BigDecimal amount) {
         this.totalEwaAmount = this.totalEwaAmount.add(amount);
     }
