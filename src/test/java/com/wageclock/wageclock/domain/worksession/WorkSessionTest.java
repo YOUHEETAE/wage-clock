@@ -73,9 +73,31 @@ public class WorkSessionTest {
                 .employment(employment)
                 .clockIn(LocalDateTime.now())
                 .build();
+        workSession.pause();
         workSession.resume();
         assertEquals(WorkSession.WorkSessionStatus.WORKING, workSession.getStatus());
         assertFalse(workSession.isPaused());
+    }
+    @Test
+    void PAUSED_아닌_세션_재개시_예외(){
+        WorkSession workSession = WorkSession.builder()
+                .employment(employment)
+                .clockIn(LocalDateTime.now())
+                .build();
+        // WORKING 상태에서 재개하면 lastResumeAt이 밀려 그동안의 적립분이 사라진다
+        assertThrows(IllegalStateException.class, workSession::resume);
+
+        workSession.clockOut();
+        assertThrows(IllegalStateException.class, workSession::resume);
+    }
+    @Test
+    void 완료된_세션_일시정지시_예외(){
+        WorkSession workSession = WorkSession.builder()
+                .employment(employment)
+                .clockIn(LocalDateTime.now())
+                .build();
+        workSession.clockOut();
+        assertThrows(IllegalStateException.class, workSession::pause);
     }
     @Test
     void pause_후_earnedAmount_스냅샷_저장() throws InterruptedException {

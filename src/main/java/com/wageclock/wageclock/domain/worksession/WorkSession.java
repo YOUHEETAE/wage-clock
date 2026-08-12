@@ -94,10 +94,18 @@ public class WorkSession extends BaseEntity {
     }
 
     public void pause(){
+        if(isCompleted()){
+            throw new IllegalStateException("Work session has already been closed");
+        }
         this.earnedAmount = getCurrentEarnedAmount();
         this.status = WorkSessionStatus.PAUSED;
     }
     public void resume(){
+        // PAUSED에서만 허용 — WORKING에서 재개하면 lastResumeAt이 현재로 밀려
+        // 그동안 쌓인 적립분이 사라지고, COMPLETED에서 재개하면 퇴근 시 이중 계상된다
+        if(!isPaused()){
+            throw new IllegalStateException("Work session is not paused");
+        }
         this.status = WorkSessionStatus.WORKING;
         this.lastResumeAt = LocalDateTime.now();
     }

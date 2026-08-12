@@ -1,8 +1,6 @@
 package com.wageclock.wageclock.domain.worksession;
 
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -10,8 +8,7 @@ import java.util.Optional;
 
 @Repository
 public interface WorkSessionRepository extends JpaRepository<WorkSession, Long> {
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     boolean existsByEmploymentIdAndStatus(Long employmentId, WorkSession.WorkSessionStatus status);
-    Optional<WorkSession> findByEmploymentIdAndStatus(Long employmentId, WorkSession.WorkSessionStatus status);
     Optional<WorkSession> findByEmploymentIdAndStatusNot(Long employmentId, WorkSession.WorkSessionStatus status);
+    boolean existsByEmploymentIdAndStatusNot(Long employmentId, WorkSession.WorkSessionStatus status);
 }

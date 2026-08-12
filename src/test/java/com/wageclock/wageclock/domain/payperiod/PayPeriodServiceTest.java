@@ -2,6 +2,7 @@ package com.wageclock.wageclock.domain.payperiod;
 
 import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.employment.Employment;
+import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
@@ -33,6 +34,8 @@ public class PayPeriodServiceTest {
     @Mock
     private PayPeriodSummaryRepository payPeriodSummaryRepository;
     @Mock
+    private EmploymentRepository employmentRepository;
+    @Mock
     Employment employment;
     @Mock
     PayPeriod payPeriod;
@@ -44,7 +47,13 @@ public class PayPeriodServiceTest {
     Worker worker;
 
     @Test
+    void employment_없을_시_예외(){
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.empty());
+        assertThrows(NotFoundException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
+    }
+    @Test
     void employmentId_권한_체크_예외(){
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
                 .thenReturn(Optional.of(payPeriod));
         when(payPeriod.getEmployerId()).thenReturn(2L);
@@ -52,40 +61,27 @@ public class PayPeriodServiceTest {
     }
     @Test
     void ACTIVE_payPeriod_없을_시_예외(){
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
                 .thenReturn(Optional.empty());
         assertThrows(NotFoundException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
     }
     @Test
-    void workSession_WORKING_상태_존재_시_예외(){
+    void 활성_workSession_존재_시_예외(){
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
                 .thenReturn(Optional.of(payPeriod));
         when(payPeriod.getEmployerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.WORKING))
-                .thenReturn(true);
-        assertThrows(IllegalStateException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
-    }
-    @Test
-    void workSession_PAUSED_상태_존재_시_예외(){
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        when(payPeriod.getEmployerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.WORKING))
-                .thenReturn(false);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.PAUSED))
+        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L,
+                WorkSession.WorkSessionStatus.COMPLETED))
                 .thenReturn(true);
         assertThrows(IllegalStateException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
     }
     @Test
     void 정상_close(){
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.WORKING))
-                .thenReturn(false);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.PAUSED))
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
+        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L,
+                WorkSession.WorkSessionStatus.COMPLETED))
                 .thenReturn(false);
         when(employment.getEmployer()).thenReturn(employer);
         when(employer.getId()).thenReturn(1L);

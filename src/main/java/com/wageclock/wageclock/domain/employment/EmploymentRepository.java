@@ -1,11 +1,14 @@
 package com.wageclock.wageclock.domain.employment;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 
 @Repository
@@ -14,4 +17,15 @@ public interface EmploymentRepository extends JpaRepository<Employment,Long> {
 
     List<Employment> findByWorker_Id(Long workerId);
 
+    // 출근·정산 마감의 동시 진입을 막는 락.
+    // WorkSession이나 PayPeriod는 아직 없을 수 있어 잠글 행이 없으므로,
+    // 두 흐름 모두에서 반드시 존재하는 Employment를 기준점으로 삼는다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Employment e WHERE e.id = :id")
+    Optional<Employment> findByIdWithLock(@Param("id") Long id);
+
+    // ORDER BY 필수 — 여러 행을 잠그므로 획득 순서가 고정되어야 데드락이 없다
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Employment e WHERE e.id IN :ids ORDER BY e.id")
+    List<Employment> findAllByIdInWithLock(@Param("ids") List<Long> ids);
 }
