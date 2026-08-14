@@ -9,6 +9,7 @@ import com.wageclock.wageclock.global.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +54,29 @@ public class BulkSettlementService {
         bulkSettlementProcessor.updateAccountInfo(account, bulkSettlement);
         return new BulkSettlementResponse(bulkSettlement.getId(), bulkSettlement.getTotalAmount(), account.bank(),
                 account.accountNumber(), account.expiredAt());
+    }
+
+    /**
+     * 결제 상태를 PG에 재조회해 정산 진행 여부를 판단한다.
+     * 웹훅과 스케줄러 양쪽의 진입점이며, 웹훅 페이로드는 "확인해보라"는 신호로만 쓴다.
+     * 위조된 웹훅이 와도 PG가 PAID로 답하지 않으면 아무 일도 일어나지 않는다.
+     */
+    public void syncPaymentStatus(String portOnePaymentId) {
+        VirtualAccountPaymentResult payment = virtualAccountPort.getPaymentResult(portOnePaymentId);
+
+        switch (payment.status()) {
+            case PAID -> {
+                BigDecimal expected = bulkSettlementProcessor.getTotalAmount(portOnePaymentId);
+                if (payment.paidAmount() == null || expected.compareTo(payment.paidAmount()) != 0) {
+                    log.error("결제 금액 불일치로 정산 중단 paymentId={} 기대={} 실제={}",
+                            portOnePaymentId, expected, payment.paidAmount());
+                    return;
+                }
+                initiateBulkSettlement(portOnePaymentId);
+            }
+            case FAILED -> failedPayment(portOnePaymentId);
+            case PENDING -> { } // 아직 입금 전 — 다음 확인을 기다린다
+        }
     }
 
     public void initiateBulkSettlement(String portOnePaymentId) {

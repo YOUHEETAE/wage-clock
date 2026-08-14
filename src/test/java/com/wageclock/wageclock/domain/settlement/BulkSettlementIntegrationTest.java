@@ -3,6 +3,8 @@ package com.wageclock.wageclock.domain.settlement;
 import com.wageclock.wageclock.domain.auth.UserRole;
 import com.wageclock.wageclock.domain.outbox.*;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.port.PaymentStatus;
+import com.wageclock.wageclock.domain.port.VirtualAccountPaymentResult;
 import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
 import com.wageclock.wageclock.infrastructure.InterBankFailureNotification;
@@ -22,6 +24,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class BulkSettlementIntegrationTest extends IntegrationTestBase {
@@ -69,15 +73,84 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
         return employmentId2;
     }
 
+    /**
+     * 웹훅은 "확인해보라"는 신호일 뿐이고 실제 판단은 PG 재조회로 하므로,
+     * 조회 결과를 PAID + 정산 총액과 일치하는 금액으로 세팅한 뒤 웹훅을 보낸다.
+     */
+    private void triggerPaidWebhook(String portOnePaymentId) {
+        BigDecimal total = bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
+                .orElseThrow()
+                .getTotalAmount();
+        when(virtualAccountPort.getPaymentResult(portOnePaymentId))
+                .thenReturn(new VirtualAccountPaymentResult(PaymentStatus.PAID, total));
+        postWebhook(portOnePaymentId);
+    }
+
+    private void postWebhook(String portOnePaymentId) {
+        testRestTemplate.postForEntity("/webhook",
+                new HttpEntity<>(new PortOneWebhookPayload("Transaction.Paid", null,
+                        new PortOneWebhookPayload.Data(null, portOnePaymentId, null)), new HttpHeaders()),
+                Void.class);
+    }
+
+    private String requestSettlement() {
+        when(virtualAccountPort.issueVirtualAccount(any(), any(), any(), any()))
+                .thenReturn(new VirtualAccountResult("Toss", "1234-5678", "2026-12-31"));
+        testRestTemplate.postForEntity("/api/settlements/request",
+                new HttpEntity<>(List.of(employmentId), authHeaders(employerToken)),
+                BulkSettlementResponse.class);
+        return bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
+    }
+
     private void requestAndTriggerSettlement(List<Long> employmentIds) {
         testRestTemplate.postForEntity("/api/settlements/request",
                 new HttpEntity<>(employmentIds, authHeaders(employerToken)),
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
-        testRestTemplate.postForEntity("/webhook",
-                new HttpEntity<>(new PortOneWebhookPayload("Transaction.Paid", null,
-                        new PortOneWebhookPayload.Data(null, portOnePaymentId, null)), new HttpHeaders()),
-                Void.class);
+        triggerPaidWebhook(portOnePaymentId);
+    }
+
+    // ─── 웹훅 검증 ────────────────────────────────────────────────────────────────
+    // 웹훅 페이로드는 신뢰하지 않고 PG 재조회로 판단한다.
+
+    @Test
+    void 입금되지_않았는데_웹훅이_오면_정산이_시작되지_않는다() {
+        String portOnePaymentId = requestSettlement();
+
+        // 위조된 Transaction.Paid 웹훅. PG는 아직 입금 전이라고 답한다.
+        when(virtualAccountPort.getPaymentResult(portOnePaymentId))
+                .thenReturn(new VirtualAccountPaymentResult(PaymentStatus.PENDING, null));
+        postWebhook(portOnePaymentId);
+
+        assertEquals(BulkSettlement.BulkSettlementStatus.PROCESSING,
+                bulkSettlementRepository.findAll().get(0).getStatus());
+        verify(wageTransferPort, never()).transfer(any(), any(), any());
+    }
+
+    @Test
+    void 입금액이_정산총액과_다르면_정산이_시작되지_않는다() {
+        String portOnePaymentId = requestSettlement();
+
+        when(virtualAccountPort.getPaymentResult(portOnePaymentId))
+                .thenReturn(new VirtualAccountPaymentResult(PaymentStatus.PAID, BigDecimal.ONE));
+        postWebhook(portOnePaymentId);
+
+        assertEquals(BulkSettlement.BulkSettlementStatus.PROCESSING,
+                bulkSettlementRepository.findAll().get(0).getStatus());
+        verify(wageTransferPort, never()).transfer(any(), any(), any());
+    }
+
+    @Test
+    void 결제가_취소되면_PAYMENT_FAILED() {
+        String portOnePaymentId = requestSettlement();
+
+        when(virtualAccountPort.getPaymentResult(portOnePaymentId))
+                .thenReturn(new VirtualAccountPaymentResult(PaymentStatus.FAILED, null));
+        postWebhook(portOnePaymentId);
+
+        assertEquals(BulkSettlement.BulkSettlementStatus.PAYMENT_FAILED,
+                bulkSettlementRepository.findAll().get(0).getStatus());
+        verify(wageTransferPort, never()).transfer(any(), any(), any());
     }
 
     @Test
@@ -109,10 +182,7 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
 
-        testRestTemplate.postForEntity("/webhook",
-                new HttpEntity<>(new PortOneWebhookPayload("Transaction.Paid", null,
-                        new PortOneWebhookPayload.Data(null, portOnePaymentId, null)), new HttpHeaders()),
-                Void.class);
+        triggerPaidWebhook(portOnePaymentId);
 
         BulkSettlement settlement = bulkSettlementRepository.findAll().get(0);
         assertEquals(BulkSettlement.BulkSettlementStatus.COMPLETED, settlement.getStatus());
@@ -134,10 +204,7 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
 
-        testRestTemplate.postForEntity("/webhook",
-                new HttpEntity<>(new PortOneWebhookPayload("Transaction.Paid", null,
-                        new PortOneWebhookPayload.Data(null, portOnePaymentId, null)), new HttpHeaders()),
-                Void.class);
+        triggerPaidWebhook(portOnePaymentId);
 
         BulkSettlement settlement = bulkSettlementRepository.findAll().get(0);
         assertEquals(BulkSettlement.BulkSettlementStatus.TRANSFER_FAILED, settlement.getStatus());
@@ -205,10 +272,7 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
 
-        testRestTemplate.postForEntity("/webhook",
-                new HttpEntity<>(new PortOneWebhookPayload("Transaction.Paid", null,
-                        new PortOneWebhookPayload.Data(null, portOnePaymentId, null)), new HttpHeaders()),
-                Void.class);
+        triggerPaidWebhook(portOnePaymentId);
 
         assertEquals(BulkSettlement.BulkSettlementStatus.COMPLETED,
                 bulkSettlementRepository.findAll().get(0).getStatus());

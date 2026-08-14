@@ -29,12 +29,8 @@ public class BulkSettlementScheduler {
                 .findByStatus(BulkSettlement.BulkSettlementStatus.PROCESSING);
         for (BulkSettlement settlement : settlements) {
             try {
-                String status = virtualAccountPort.getVirtualAccountStatus(settlement.getPortOnePaymentId());
-                if ("PAID".equals(status)) {
-                    bulkSettlementService.initiateBulkSettlement(settlement.getPortOnePaymentId());
-                } else if ("FAILED".equals(status) || "CANCELLED".equals(status)) {
-                    bulkSettlementService.failedPayment(settlement.getPortOnePaymentId());
-                }
+                // 웹훅과 동일한 재조회 경로를 탄다
+                bulkSettlementService.syncPaymentStatus(settlement.getPortOnePaymentId());
             } catch (Exception e) {
                 log.warn("Failed to check bulk settlement status: {}", settlement.getPortOnePaymentId(), e);
             }

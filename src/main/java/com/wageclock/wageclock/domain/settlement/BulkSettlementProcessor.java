@@ -179,6 +179,13 @@ public class BulkSettlementProcessor {
         bulkSettlement.transferFailed();
     }
 
+    @Transactional(readOnly = true)
+    public BigDecimal getTotalAmount(String portOnePaymentId){
+        return bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
+                .orElseThrow(() -> new NotFoundException(portOnePaymentId + " not found"))
+                .getTotalAmount();
+    }
+
     @Transactional
     public void failPayment(String portOnePaymentId){
         BulkSettlement bulkSettlement = bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
