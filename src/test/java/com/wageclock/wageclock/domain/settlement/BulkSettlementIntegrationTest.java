@@ -19,12 +19,17 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +41,8 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
     @Autowired InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
     @Autowired OutBoxScheduler outBoxScheduler;
     @Autowired BulkSettlementScheduler bulkSettlementScheduler;
+    @Autowired BulkSettlementProcessor bulkSettlementProcessor;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     String employerToken;
     String workerToken;
@@ -108,6 +115,110 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
                 BulkSettlementResponse.class);
         String portOnePaymentId = bulkSettlementRepository.findAll().get(0).getPortOnePaymentId();
         triggerPaidWebhook(portOnePaymentId);
+    }
+
+    /** 이체가 시작된 지 오래된 것처럼 만든다. updatedAt은 JPA 감사 필드라 직접 쓸 수 없다. */
+    private void backdateUpdatedAt(String portOnePaymentId, int minutes) {
+        jdbcTemplate.update("UPDATE bulk_settlements SET updated_at = ? WHERE port_one_payment_id = ?",
+                Timestamp.valueOf(LocalDateTime.now().minusMinutes(minutes)), portOnePaymentId);
+    }
+
+    // ─── 중복 진입 차단 ───────────────────────────────────────────────────────────
+    // 웹훅·스케줄러가 같은 정산에 동시에 들어올 수 있으므로 선점한 쪽만 이체한다.
+
+    @Test
+    void 이미_선점된_정산은_다시_선점되지_않는다() {
+        String portOnePaymentId = requestSettlement();
+
+        assertTrue(bulkSettlementProcessor.claimForTransfer(portOnePaymentId));
+        assertFalse(bulkSettlementProcessor.claimForTransfer(portOnePaymentId));
+    }
+
+    @Test
+    void 완료된_정산은_선점되지_않는다() {
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult("1TX001", null, null));
+        String portOnePaymentId = requestSettlement();
+        triggerPaidWebhook(portOnePaymentId);
+
+        assertEquals(BulkSettlement.BulkSettlementStatus.COMPLETED,
+                bulkSettlementRepository.findAll().get(0).getStatus());
+        assertFalse(bulkSettlementProcessor.claimForTransfer(portOnePaymentId));
+    }
+
+    @Test
+    void 중복_웹훅이_와도_이체는_한_번만_실행된다() {
+        when(wageTransferPort.transfer(any(), any(), any()))
+                .thenReturn(new WageTransferResult("1TX001", null, null));
+        String portOnePaymentId = requestSettlement();
+
+        triggerPaidWebhook(portOnePaymentId);
+        triggerPaidWebhook(portOnePaymentId);   // PortOne 재전송
+
+        verify(wageTransferPort, times(1)).transfer(any(), any(), any());
+        assertEquals(BulkSettlement.BulkSettlementStatus.COMPLETED,
+                bulkSettlementRepository.findAll().get(0).getStatus());
+    }
+
+    @Test
+    void 이체중인_정산은_스케줄러가_다시_집지_않는다() {
+        String portOnePaymentId = requestSettlement();
+        bulkSettlementProcessor.claimForTransfer(portOnePaymentId);   // 이체 진행 중
+
+        bulkSettlementScheduler.retryMissedWebhook();
+
+        // PROCESSING만 훑으므로 TRANSFERRING은 대상이 아니다
+        verify(virtualAccountPort, never()).getPaymentResult(portOnePaymentId);
+        assertEquals(BulkSettlement.BulkSettlementStatus.TRANSFERRING,
+                bulkSettlementRepository.findAll().get(0).getStatus());
+    }
+
+    // ─── 이체 중 방치 회수 ────────────────────────────────────────────────────────
+    // 프로세스가 죽으면 TRANSFERRING인 채로 남고 어느 스케줄러도 잡지 못한다.
+
+    @Test
+    void 이체중_상태로_방치되면_회수된다() {
+        String portOnePaymentId = requestSettlement();
+        Long itemId = bulkSettlementItemRepository.findAll().get(0).getId();
+
+        // 이체를 시작하고 전문번호까지 발급한 직후 프로세스가 죽은 상황
+        bulkSettlementProcessor.claimForTransfer(portOnePaymentId);
+        bulkSettlementProcessor.assignMessageNo(itemId, "1TX001");
+        backdateUpdatedAt(portOnePaymentId, 31);
+
+        bulkSettlementScheduler.recoverStaleTransferring();
+
+        assertEquals(BulkSettlement.BulkSettlementStatus.TRANSFER_FAILED,
+                bulkSettlementRepository.findAll().get(0).getStatus());
+        // 전문번호가 이미 나갔을 수 있으므로 재이체가 아니라 조회 경로로 보낸다
+        assertEquals(BulkSettlementItem.BulkSettlementItemStatus.UNKNOWN,
+                bulkSettlementItemRepository.findById(itemId).orElseThrow().getStatus());
+    }
+
+    @Test
+    void 전문번호가_없는_아이템은_회수해도_재이체_대상으로_남는다() {
+        String portOnePaymentId = requestSettlement();
+        Long itemId = bulkSettlementItemRepository.findAll().get(0).getId();
+
+        // 전문번호 발급 전에 죽었다면 은행에 아무것도 나가지 않았다
+        bulkSettlementProcessor.claimForTransfer(portOnePaymentId);
+        backdateUpdatedAt(portOnePaymentId, 31);
+
+        bulkSettlementScheduler.recoverStaleTransferring();
+
+        assertEquals(BulkSettlementItem.BulkSettlementItemStatus.PENDING,
+                bulkSettlementItemRepository.findById(itemId).orElseThrow().getStatus());
+    }
+
+    @Test
+    void 임계시간_전이면_회수하지_않는다() {
+        String portOnePaymentId = requestSettlement();
+        bulkSettlementProcessor.claimForTransfer(portOnePaymentId);
+
+        bulkSettlementScheduler.recoverStaleTransferring();
+
+        assertEquals(BulkSettlement.BulkSettlementStatus.TRANSFERRING,
+                bulkSettlementRepository.findAll().get(0).getStatus());
     }
 
     // ─── 웹훅 검증 ────────────────────────────────────────────────────────────────
