@@ -159,6 +159,7 @@ class BulkSettlementServiceTest {
     @Test
     void retrySettlement_PENDING_INQUIRY_성공_completeItem() {
         BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "MSG-001");
+        when(bulkSettlementProcessor.claimForTransfer("BULK-001")).thenReturn(true);
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
         when(wageTransferPort.inquireTransfer("MSG-001"))
@@ -174,6 +175,7 @@ class BulkSettlementServiceTest {
     @Test
     void retrySettlement_PENDING_INQUIRY_VTIM_markPendingInquiry() {
         BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "MSG-001");
+        when(bulkSettlementProcessor.claimForTransfer("BULK-001")).thenReturn(true);
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
         when(wageTransferPort.inquireTransfer("MSG-001"))
@@ -189,6 +191,7 @@ class BulkSettlementServiceTest {
     @Test
     void retrySettlement_PENDING_INQUIRY_예외_unknownItem() {
         BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "MSG-001");
+        when(bulkSettlementProcessor.claimForTransfer("BULK-001")).thenReturn(true);
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
         when(wageTransferPort.inquireTransfer("MSG-001"))

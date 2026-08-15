@@ -29,7 +29,8 @@ public class PortOneVirtualAccountAdapterTest {
         when(portOneService.getVirtualAccountInfo("testId"))
                 .thenReturn(new PortOneVirtualAccountInfoResponse("Ready", "1234",
                         new PortOneVirtualAccountInfoResponse
-                                .Method("Toss", "1234", "2026-05-01","홍길동")));
+                                .Method("Toss", "1234", "2026-05-01","홍길동"),
+                        new PortOneVirtualAccountInfoResponse.Amount(10000L, 0L)));
         portOneVirtualAccountAdaptor.issueVirtualAccount("testId",
                 BigDecimal.valueOf(10000), "EWA-1", "홍길동");
         verify(portOneService).createVirtualAccount("testId",
@@ -42,7 +43,8 @@ public class PortOneVirtualAccountAdapterTest {
         when(portOneService.getVirtualAccountInfo("testId"))
                 .thenReturn(new PortOneVirtualAccountInfoResponse("Ready", "1234",
                         new PortOneVirtualAccountInfoResponse
-                                .Method("Toss", "1234", "2026-05-01","홍길동")));
+                                .Method("Toss", "1234", "2026-05-01","홍길동"),
+                        new PortOneVirtualAccountInfoResponse.Amount(10000L, 0L)));
         VirtualAccountResult result = portOneVirtualAccountAdaptor.issueVirtualAccount("testId",
                 BigDecimal.valueOf(10000), "EWA-1", "홍길동");
         assertEquals("Toss",result.bank());

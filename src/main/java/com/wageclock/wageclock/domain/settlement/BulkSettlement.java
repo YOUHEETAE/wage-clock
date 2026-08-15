@@ -46,7 +46,8 @@ public class BulkSettlement extends BaseEntity {
 
     public enum BulkSettlementStatus {
         READY,
-        PROCESSING,
+        PROCESSING,      // 가상계좌 발급됨, 입금 대기
+        TRANSFERRING,    // 이체 진행 중 — 다른 경로의 재진입을 막는다
         COMPLETED,
         TRANSFER_FAILED,
         PAYMENT_FAILED,
@@ -86,5 +87,8 @@ public class BulkSettlement extends BaseEntity {
     }
     public void retrying(){
         this.status = BulkSettlementStatus.RETRYING;
+    }
+    public void transferring(){
+        this.status = BulkSettlementStatus.TRANSFERRING;
     }
 }
