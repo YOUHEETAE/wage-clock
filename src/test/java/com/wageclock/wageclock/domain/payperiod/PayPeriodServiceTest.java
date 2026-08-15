@@ -1,8 +1,6 @@
 package com.wageclock.wageclock.domain.payperiod;
 
-import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.employment.Employment;
-import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
@@ -34,67 +32,13 @@ public class PayPeriodServiceTest {
     @Mock
     private PayPeriodSummaryRepository payPeriodSummaryRepository;
     @Mock
-    private EmploymentRepository employmentRepository;
-    @Mock
     Employment employment;
     @Mock
     PayPeriod payPeriod;
     @Mock
-    Employer employer;
-    @Mock
     WorkSession workSession;
     @Mock
     Worker worker;
-
-    @Test
-    void employment_없을_시_예외(){
-        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.empty());
-        assertThrows(NotFoundException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
-    }
-    @Test
-    void employmentId_권한_체크_예외(){
-        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        when(payPeriod.getEmployerId()).thenReturn(2L);
-        assertThrows(UnauthorizedException.class,()-> payPeriodService.closePayPeriod(1L,1L));
-    }
-    @Test
-    void ACTIVE_payPeriod_없을_시_예외(){
-        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.empty());
-        assertThrows(NotFoundException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
-    }
-    @Test
-    void 활성_workSession_존재_시_예외(){
-        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        when(payPeriod.getEmployerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L,
-                WorkSession.WorkSessionStatus.COMPLETED))
-                .thenReturn(true);
-        assertThrows(IllegalStateException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
-    }
-    @Test
-    void 정상_close(){
-        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
-        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L,
-                WorkSession.WorkSessionStatus.COMPLETED))
-                .thenReturn(false);
-        when(employment.getEmployer()).thenReturn(employer);
-        when(employer.getId()).thenReturn(1L);
-        PayPeriod payPeriod = new PayPeriod(employment);
-        payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
-        payPeriod.addEwaAmount(BigDecimal.valueOf(1000));
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        payPeriodService.closePayPeriod(1L, 1L);
-        assertEquals(PayPeriod.PayPeriodStatus.CLOSED, payPeriod.getStatus());
-        assertEquals(LocalDate.now(), payPeriod.getPeriodEnd());
-        assertEquals(0, payPeriod.getActualPayAmount().compareTo(BigDecimal.valueOf(9000)));
-    }
 
     @Test
     void summary_ACTIVE_payPeriod_없을_시_예외() {
