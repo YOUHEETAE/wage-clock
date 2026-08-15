@@ -18,6 +18,8 @@ public interface EwaRequestRepository extends JpaRepository<EwaRequest, Long> {
 
     boolean existsByPayPeriodAndStatusIn(PayPeriod payPeriod, List<EwaRequest.EwaRequestStatus> statuses);
 
+    boolean existsByPayPeriodAndStatusNotIn(PayPeriod payPeriod, List<EwaRequest.EwaRequestStatus> statuses);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM EwaRequest e WHERE e.id = :id")
     Optional<EwaRequest> findByIdWithLock(@Param("id") Long id);
@@ -33,7 +35,7 @@ public interface EwaRequestRepository extends JpaRepository<EwaRequest, Long> {
     @Query("SELECT new com.wageclock.wageclock.domain.ewarequest.EwaRequestDetailResponse(e.id, e.requestedAmount, e.status, e.createdAt, e.updatedAt) " +
             "FROM EwaRequest e " +
             "JOIN e.payPeriod pp " +
-            "WHERE pp.employment.id = :employmentId AND pp.employment.worker.id = :workerId AND pp.status = 'ACTIVE'")
+            "WHERE pp.employment.id = :employmentId AND pp.employment.worker.id = :workerId AND pp.status IN ('ACTIVE', 'SETTLING')")
     List<EwaRequestDetailResponse> findDetailsByEmploymentId(@Param("employmentId") Long employmentId, @Param("workerId") Long workerId);
 
 }

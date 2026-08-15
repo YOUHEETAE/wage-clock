@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.ewatransfer;
 
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -30,5 +31,5 @@ public interface EwaTransferRepository extends JpaRepository<EwaTransfer, Long> 
     })
     List<EwaTransfer> findByStatusIn(List<EwaTransfer.EwaTransferStatus> status);
 
-
+    boolean existsByEwaRequest_PayPeriodAndStatusNotIn(PayPeriod payPeriod, List<EwaTransfer.EwaTransferStatus> statuses);
 }

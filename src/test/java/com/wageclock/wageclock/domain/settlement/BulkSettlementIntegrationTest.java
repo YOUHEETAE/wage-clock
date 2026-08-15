@@ -1,8 +1,12 @@
 package com.wageclock.wageclock.domain.settlement;
 
 import com.wageclock.wageclock.domain.auth.UserRole;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequestDto;
+import com.wageclock.wageclock.domain.ewarequest.EwaResponseDto;
 import com.wageclock.wageclock.domain.outbox.*;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodSummaryResponse;
+import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.port.PaymentStatus;
 import com.wageclock.wageclock.domain.port.VirtualAccountPaymentResult;
 import com.wageclock.wageclock.domain.port.VirtualAccountResult;
@@ -14,8 +18,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -25,6 +31,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -262,6 +269,115 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
         assertEquals(BulkSettlement.BulkSettlementStatus.PAYMENT_FAILED,
                 bulkSettlementRepository.findAll().get(0).getStatus());
         verify(wageTransferPort, never()).transfer(any(), any(), any());
+    }
+
+    // ─── 정산 중 PayPeriod 잠금(SETTLING) ────────────────────────────────────────
+    // 정산 시작과 마감 사이는 사장 입금을 기다리는 긴 구간이다. 그동안 PayPeriod 금액이
+    // 움직이면 이미 확정된 이체액과 어긋나므로, SETTLING으로 잠가 변동을 막는다.
+
+    @Test
+    void 정산을_요청하면_PayPeriod가_SETTLING이_된다() {
+        requestSettlement();
+
+        assertEquals(PayPeriod.PayPeriodStatus.SETTLING,
+                payPeriodRepository.findAll().get(0).getStatus());
+    }
+
+    // 출근을 허용하면 세션이 SETTLING인 PayPeriod에 붙고, 마감 뒤 퇴근한 적립액이 고아가 된다
+    @Test
+    void 정산_진행중에는_출근할_수_없다() {
+        requestSettlement();
+
+        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/work-sessions/clock-in",
+                new HttpEntity<>(new ClockInRequest(employmentId), authHeaders(workerToken)), Void.class);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(1, payPeriodRepository.findAll().size());   // 새 PayPeriod가 생기지 않는다
+    }
+
+    @Test
+    void 결제가_취소되면_PayPeriod가_ACTIVE로_돌아온다() {
+        String portOnePaymentId = requestSettlement();
+
+        when(virtualAccountPort.getPaymentResult(portOnePaymentId))
+                .thenReturn(new VirtualAccountPaymentResult(PaymentStatus.FAILED, null));
+        postWebhook(portOnePaymentId);
+
+        assertEquals(PayPeriod.PayPeriodStatus.ACTIVE,
+                payPeriodRepository.findAll().get(0).getStatus());
+    }
+
+    // 되돌린 뒤에는 출근도 재정산도 다시 된다 — SETTLING에 갇히지 않는다
+    @Test
+    void 결제_취소로_되돌아오면_출근할_수_있다() {
+        String portOnePaymentId = requestSettlement();
+        when(virtualAccountPort.getPaymentResult(portOnePaymentId))
+                .thenReturn(new VirtualAccountPaymentResult(PaymentStatus.FAILED, null));
+        postWebhook(portOnePaymentId);
+
+        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/work-sessions/clock-in",
+                new HttpEntity<>(new ClockInRequest(employmentId), authHeaders(workerToken)), Void.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    // ─── 정산 진입 검증 ──────────────────────────────────────────────────────────
+
+    @Test
+    void 근무중인_근로자가_있으면_정산_요청이_거부된다() {
+        clockIn(employmentId, workerToken);
+
+        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/settlements/request",
+                new HttpEntity<>(List.of(employmentId), authHeaders(employerToken)), Void.class);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(bulkSettlementRepository.findAll().isEmpty());
+        assertEquals(PayPeriod.PayPeriodStatus.ACTIVE,
+                payPeriodRepository.findAll().get(0).getStatus());
+    }
+
+    // 정산 후 EWA가 확정되면 totalEwaAmount가 바뀌어 이미 이체한 금액과 어긋난다
+    @Test
+    void 미확정_EWA_요청이_있으면_정산_요청이_거부된다() {
+        testRestTemplate.postForEntity("/api/ewa-requests/request",
+                new HttpEntity<>(new EwaRequestDto(employmentId, BigDecimal.valueOf(500),
+                        UUID.randomUUID().toString()), authHeaders(workerToken)),
+                EwaResponseDto.class);
+
+        ResponseEntity<Void> response = testRestTemplate.postForEntity("/api/settlements/request",
+                new HttpEntity<>(List.of(employmentId), authHeaders(employerToken)), Void.class);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(bulkSettlementRepository.findAll().isEmpty());
+    }
+
+    // ─── 정산 중 조회 ────────────────────────────────────────────────────────────
+    // SETTLING을 조회에서 빼면 정산 거는 순간 화면이 비어버린다.
+
+    @Test
+    void 정산_진행중에도_근로자_summary가_조회된다() {
+        requestSettlement();
+
+        ResponseEntity<PayPeriodSummaryResponse> response = testRestTemplate.exchange(
+                "/api/pay-periods/" + employmentId + "/summary", HttpMethod.GET,
+                new HttpEntity<>(null, authHeaders(workerToken)), PayPeriodSummaryResponse.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(PayPeriod.PayPeriodStatus.SETTLING, response.getBody().payPeriodStatus());
+    }
+
+    @Test
+    void 정산_진행중에도_사장_summaries에_잡히고_상태가_노출된다() {
+        requestSettlement();
+
+        ResponseEntity<List<PayPeriodSummaryResponse>> response = testRestTemplate.exchange(
+                "/api/pay-periods/summaries?workplaceId=" + workplaceId, HttpMethod.GET,
+                new HttpEntity<>(null, authHeaders(employerToken)),
+                new ParameterizedTypeReference<>() {});
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(1, response.getBody().size());
+        assertEquals(PayPeriod.PayPeriodStatus.SETTLING, response.getBody().get(0).payPeriodStatus());
     }
 
     @Test

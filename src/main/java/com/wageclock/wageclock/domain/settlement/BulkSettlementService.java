@@ -151,6 +151,7 @@ public class BulkSettlementService {
      public void failedPayment(String portOnePaymentId){
         bulkSettlementProcessor.failPayment(portOnePaymentId);
      }
+
      public void receiveInterBankFailure(String transferId){
         bulkSettlementProcessor.receiveInterBankFailure(transferId);
      }

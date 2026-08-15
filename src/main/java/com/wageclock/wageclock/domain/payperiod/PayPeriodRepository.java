@@ -27,4 +27,5 @@ public interface PayPeriodRepository extends JpaRepository<PayPeriod, Long> {
             @Param("employmentIds") List<Long> employmentIds,
             @Param("employerId") Long employerId);
 
+    Optional<PayPeriod> findByEmployment_IdAndStatusIn(Long employmentId, List<PayPeriod.PayPeriodStatus> statuses);
 }

@@ -23,4 +23,9 @@ public interface EmploymentRepository extends JpaRepository<Employment,Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM Employment e WHERE e.id = :id")
     Optional<Employment> findByIdWithLock(@Param("id") Long id);
+
+    // ORDER BY 필수 — 여러 행을 잠그므로 획득 순서가 고정되어야 데드락이 없다
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Employment e WHERE e.id IN :ids ORDER BY e.id")
+    List<Employment> findAllByIdInWithLock(@Param("ids") List<Long> ids);
 }

@@ -1,6 +1,5 @@
 package com.wageclock.wageclock.domain.payperiod;
 
-import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
@@ -29,7 +28,8 @@ public class PayPeriodService {
 
     @Transactional(readOnly = true)
     public PayPeriodSummaryResponse getPayPeriodSummaryResponse(Long employmentId, Long workerId){
-        PayPeriod payPeriod = payPeriodRepository.findByEmployment_IdAndStatus(employmentId, PayPeriod.PayPeriodStatus.ACTIVE)
+        PayPeriod payPeriod = payPeriodRepository.findByEmployment_IdAndStatusIn(employmentId,
+                        List.of(PayPeriod.PayPeriodStatus.ACTIVE, PayPeriod.PayPeriodStatus.SETTLING))
                 .orElseThrow(() -> new NotFoundException("PayPeriod not found"));
         if (!payPeriod.getWorkerId().equals(workerId)) throw new UnauthorizedException("unauthorized");
         java.util.Optional<WorkSession> activeSession = workSessionRepository
@@ -52,6 +52,7 @@ public class PayPeriodService {
                 payPeriod.getTotalEarnedAmount().add(currentEarned),
                 payPeriod.getTotalEwaAmount(),
                 payPeriod.getRemainingEwaLimitWith(currentEarned),
-                activeSessionStatus);
+                activeSessionStatus,
+                payPeriod.getStatus());
     }
 }

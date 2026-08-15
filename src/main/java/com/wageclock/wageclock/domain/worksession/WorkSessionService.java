@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -41,8 +42,15 @@ public class WorkSessionService {
             throw new DuplicateException("this WorkSession already exists");
         }
         PayPeriod payPeriod = payPeriodRepository
-                .findByEmployment_IdAndStatus(employment.getId(), PayPeriod.PayPeriodStatus.ACTIVE)
+                .findByEmployment_IdAndStatusIn(employment.getId(),
+                        List.of(PayPeriod.PayPeriodStatus.ACTIVE, PayPeriod.PayPeriodStatus.SETTLING))
                 .orElseGet(() -> payPeriodRepository.save(new PayPeriod(employment)));
+        // 정산 중에는 새 PayPeriod를 만들지 않고 출근을 막는다.
+        // employment당 진행 중인 PayPeriod가 둘이 되면 Optional 조회들이 깨지고,
+        // 정산이 무산돼 SETTLING을 ACTIVE로 되돌릴 때 ACTIVE가 두 개가 된다.
+        if (payPeriod.getStatus() == PayPeriod.PayPeriodStatus.SETTLING) {
+            throw new IllegalStateException("정산이 진행 중이라 출근할 수 없습니다");
+        }
         WorkSession workSession = workSessionRepository.save(
                 WorkSession.builder()
                         .clockIn(LocalDateTime.now())
