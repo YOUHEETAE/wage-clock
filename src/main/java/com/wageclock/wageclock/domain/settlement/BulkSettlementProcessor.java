@@ -1,10 +1,12 @@
 package com.wageclock.wageclock.domain.settlement;
 
+import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.outbox.BulkSettlementOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.BulkSettlementOutBoxEventRepository;
 import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEventRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodCloseValidator;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.DuplicateException;
@@ -26,22 +28,29 @@ public class BulkSettlementProcessor {
     private final BulkSettlementItemRepository bulkSettlementItemRepository;
     private final BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository;
     private final InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
+    private final PayPeriodCloseValidator payPeriodCloseValidator;
+    private final EmploymentRepository employmentRepository;
 
     public BulkSettlementProcessor(PayPeriodRepository payPeriodRepository,
                                    BulkSettlementRepository bulkSettlementRepository,
                                    BulkSettlementItemRepository bulkSettlementItemRepository,
                                    BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository,
-                                   InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository) {
+                                   InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository,
+                                   PayPeriodCloseValidator payPeriodCloseValidator, EmploymentRepository employmentRepository) {
         this.payPeriodRepository = payPeriodRepository;
         this.bulkSettlementRepository = bulkSettlementRepository;
         this.bulkSettlementItemRepository = bulkSettlementItemRepository;
         this.bulkSettlementOutBoxEventRepository = bulkSettlementOutBoxEventRepository;
         this.interBankFailureOutBoxEventRepository = interBankFailureOutBoxEventRepository;
+        this.payPeriodCloseValidator = payPeriodCloseValidator;
+        this.employmentRepository = employmentRepository;
     }
 
     @Transactional
     public BulkSettlement createBulkSettlement(List<Long> employmentIds, Long employerId){
         String portOnePaymentId = "BULK-" + UUID.randomUUID();
+        // 출근(clockIn)과 직렬화하기 위한 락. 반환값은 사용하지 않는다.
+        employmentRepository.findAllByIdInWithLock(employmentIds);
         List<PayPeriod> payPeriods = payPeriodRepository
                 .findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(employmentIds, employerId);
         if(payPeriods.size() != employmentIds.size()){
@@ -54,7 +63,9 @@ public class BulkSettlementProcessor {
                             BulkSettlement.BulkSettlementStatus.PAYMENT_FAILED))) {
                 throw new DuplicateException("이미 진행 중인 정산이 있습니다.");
             }
+            payPeriodCloseValidator.validate(payPeriod);
         });
+        payPeriods.forEach(PayPeriod::startSettling);
 
         BigDecimal totalAmount = payPeriods.stream()
                 .map(PayPeriod::getActualPayAmount)
@@ -111,6 +122,9 @@ public class BulkSettlementProcessor {
         BulkSettlementItem item = bulkSettlementItemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         item.failed();
+        // 확정 실패는 돈이 나가지 않은 게 분명하므로 되돌려 재정산 대상이 되게 한다.
+        // 미확정(PENDING_INQUIRY·UNKNOWN)은 되돌리지 않는다 — 재이체되면 이중 송금이 된다.
+        item.getPayPeriod().reopen();
     }
 
     @Transactional
@@ -197,6 +211,12 @@ public class BulkSettlementProcessor {
     public void failPayment(String portOnePaymentId){
         BulkSettlement bulkSettlement = bulkSettlementRepository.findByPortOnePaymentId(portOnePaymentId)
                 .orElseThrow(() -> new NotFoundException(portOnePaymentId + " not found"));
+        // PG가 웹훅을 재전송하면 두 번 들어온다. 두 번째 reopen은 이미 ACTIVE라 예외가 난다.
+        if(bulkSettlement.getStatus() == BulkSettlement.BulkSettlementStatus.PAYMENT_FAILED)
+            return;
+        // 입금 자체가 무산됐으므로 전원 되돌린다. 안 되돌리면 SETTLING에 갇혀
+        // 재정산도 출근도 못 하는 상태로 남는다.
+        bulkSettlement.getItems().forEach(item -> item.getPayPeriod().reopen());
         bulkSettlement.paymentFailed();
     }
 

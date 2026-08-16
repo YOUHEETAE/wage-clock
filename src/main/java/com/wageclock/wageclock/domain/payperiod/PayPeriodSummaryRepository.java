@@ -24,7 +24,8 @@ public class PayPeriodSummaryRepository {
                     pp.total_earned_amount + COALESCE(active.current_earned, 0) AS total_earned_amount,
                     pp.total_ewa_amount,
                     (pp.total_earned_amount + COALESCE(active.current_earned, 0)) * 0.3 - pp.total_ewa_amount AS remaining_ewa_limit,
-                    active.status AS active_session_status
+                    active.status AS active_session_status,
+                    pp.status AS pay_period_status
                 FROM pay_periods pp
                 JOIN employments e ON pp.employment_id = e.id
                 JOIN workers w ON e.worker_id = w.id
@@ -42,7 +43,7 @@ public class PayPeriodSummaryRepository {
                 ) active ON active.employment_id = e.id
                 WHERE e.workplace_id = ?
                 AND e.employer_id = ?
-                AND pp.status = 'ACTIVE'
+                AND pp.status IN ('ACTIVE', 'SETTLING')
                 """;
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> new PayPeriodSummaryResponse(
@@ -54,6 +55,9 @@ public class PayPeriodSummaryRepository {
                 rs.getBigDecimal("remaining_ewa_limit"),
                 rs.getString("active_session_status") != null
                         ? WorkSession.WorkSessionStatus.valueOf(rs.getString("active_session_status"))
+                        : null,
+                rs.getString("pay_period_status") != null
+                        ? PayPeriod.PayPeriodStatus.valueOf(rs.getString("pay_period_status"))
                         : null
         ), workplaceId, employerId);
     }

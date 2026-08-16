@@ -17,9 +17,9 @@ public interface EmploymentRepository extends JpaRepository<Employment,Long> {
 
     List<Employment> findByWorker_Id(Long workerId);
 
-    // 출근·정산 마감의 동시 진입을 막는 락.
+    // 출근 중복 진입을 막는 락.
     // WorkSession이나 PayPeriod는 아직 없을 수 있어 잠글 행이 없으므로,
-    // 두 흐름 모두에서 반드시 존재하는 Employment를 기준점으로 삼는다.
+    // 반드시 존재하는 Employment를 기준점으로 삼는다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM Employment e WHERE e.id = :id")
     Optional<Employment> findByIdWithLock(@Param("id") Long id);

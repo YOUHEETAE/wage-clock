@@ -68,7 +68,7 @@ public class WorkSessionServiceTest {
     @Test
     void clockIn_정상_응답_반환() {
         LocalDateTime now = LocalDateTime.now();
-        when(payPeriodRepository.findByEmployment_IdAndStatus(any(), any())).thenReturn(Optional.of(payPeriod));
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(any(), any())).thenReturn(Optional.of(payPeriod));
         when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
         when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(false);
@@ -82,6 +82,23 @@ public class WorkSessionServiceTest {
         assertEquals(10L, response.sessionId());
         assertEquals(now, response.clockIn());
         assertEquals(0, response.hourlyWage().compareTo(java.math.BigDecimal.valueOf(10000)));
+    }
+
+    // 정산 중에 출근하면 세션이 SETTLING인 PayPeriod에 붙고, 마감 후 퇴근한 적립액이 고아가 된다
+    @Test
+    void clockIn_정산_진행중이면_예외() {
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
+        when(employment.getWorkerId()).thenReturn(1L);
+        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L,
+                WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(false);
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(any(), any())).thenReturn(Optional.of(payPeriod));
+        when(payPeriod.getStatus()).thenReturn(PayPeriod.PayPeriodStatus.SETTLING);
+
+        assertThrows(IllegalStateException.class,
+                () -> workSessionService.clockIn(new ClockInRequest(1L), 1L));
+
+        verify(workSessionRepository, never()).save(any());
+        verify(payPeriodRepository, never()).save(any());
     }
 
     @Test
@@ -118,7 +135,7 @@ public class WorkSessionServiceTest {
         when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
         when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(false);
-        when(payPeriodRepository.findByEmployment_IdAndStatus(any(), any())).thenReturn(Optional.empty());
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(any(), any())).thenReturn(Optional.empty());
         when(payPeriodRepository.save(any())).thenReturn(payPeriod);
         when(workSessionRepository.save(any())).thenReturn(savedWorkSession);
         when(savedWorkSession.getId()).thenReturn(10L);
