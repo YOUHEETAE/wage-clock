@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
-public class PayPeriodCloseValidator {
+public class PayPeriodSettlementValidator {
 
     private final WorkSessionRepository workSessionRepository;
     private final EwaRequestRepository ewaRequestRepository;
@@ -28,7 +28,7 @@ public class PayPeriodCloseValidator {
             List.of(EwaTransfer.EwaTransferStatus.FAILED,
                     EwaTransfer.EwaTransferStatus.COMPLETED);
 
-    public PayPeriodCloseValidator(WorkSessionRepository workSessionRepository, EwaRequestRepository ewaRequestRepository, EwaTransferRepository ewaTransferRepository) {
+    public PayPeriodSettlementValidator(WorkSessionRepository workSessionRepository, EwaRequestRepository ewaRequestRepository, EwaTransferRepository ewaTransferRepository) {
         this.workSessionRepository = workSessionRepository;
         this.ewaRequestRepository = ewaRequestRepository;
         this.ewaTransferRepository = ewaTransferRepository;
