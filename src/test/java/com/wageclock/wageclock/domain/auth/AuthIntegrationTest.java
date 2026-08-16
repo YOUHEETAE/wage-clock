@@ -86,11 +86,42 @@ public class AuthIntegrationTest {
         assertNotNull(response.getBody());
         assertNotNull(response.getBody().token());
     }
+    // 가입 여부를 알 수 없도록 비밀번호 불일치와 같은 401로 답한다
     @Test
     void 이메일_없을_시_예외(){
         loginRequest = new LoginRequest("wrongEmail",  "password");
         ResponseEntity<LoginResponse> response = testRestTemplate.postForEntity("/api/auth/login", loginRequest, LoginResponse.class);
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+
+    @Test
+    void 만료된_토큰으로_로그아웃해도_실패하지_않는다(){
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer not-a-valid-token");
+        HttpEntity<?> request = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange("/api/auth/logout", HttpMethod.POST, request, Void.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    void Bearer_형식이_아닌_헤더로_로그아웃해도_실패하지_않는다(){
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "token-without-prefix");
+        HttpEntity<?> request = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange("/api/auth/logout", HttpMethod.POST, request, Void.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    void Authorization_헤더_없이_로그아웃해도_실패하지_않는다(){
+        ResponseEntity<Void> response = testRestTemplate.exchange("/api/auth/logout", HttpMethod.POST,
+                new HttpEntity<>(new HttpHeaders()), Void.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
     }
     @Test
     void 비밀번호_불일치_시_예외(){

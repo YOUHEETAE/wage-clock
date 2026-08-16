@@ -6,7 +6,7 @@ import com.wageclock.wageclock.domain.outbox.BulkSettlementOutBoxEventRepository
 import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEventRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
-import com.wageclock.wageclock.domain.payperiod.PayPeriodCloseValidator;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodSettlementValidator;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.DuplicateException;
@@ -28,7 +28,7 @@ public class BulkSettlementProcessor {
     private final BulkSettlementItemRepository bulkSettlementItemRepository;
     private final BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository;
     private final InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
-    private final PayPeriodCloseValidator payPeriodCloseValidator;
+    private final PayPeriodSettlementValidator payPeriodSettlementValidator;
     private final EmploymentRepository employmentRepository;
 
     public BulkSettlementProcessor(PayPeriodRepository payPeriodRepository,
@@ -36,13 +36,13 @@ public class BulkSettlementProcessor {
                                    BulkSettlementItemRepository bulkSettlementItemRepository,
                                    BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository,
                                    InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository,
-                                   PayPeriodCloseValidator payPeriodCloseValidator, EmploymentRepository employmentRepository) {
+                                   PayPeriodSettlementValidator payPeriodSettlementValidator, EmploymentRepository employmentRepository) {
         this.payPeriodRepository = payPeriodRepository;
         this.bulkSettlementRepository = bulkSettlementRepository;
         this.bulkSettlementItemRepository = bulkSettlementItemRepository;
         this.bulkSettlementOutBoxEventRepository = bulkSettlementOutBoxEventRepository;
         this.interBankFailureOutBoxEventRepository = interBankFailureOutBoxEventRepository;
-        this.payPeriodCloseValidator = payPeriodCloseValidator;
+        this.payPeriodSettlementValidator = payPeriodSettlementValidator;
         this.employmentRepository = employmentRepository;
     }
 
@@ -63,7 +63,7 @@ public class BulkSettlementProcessor {
                             BulkSettlement.BulkSettlementStatus.PAYMENT_FAILED))) {
                 throw new DuplicateException("이미 진행 중인 정산이 있습니다.");
             }
-            payPeriodCloseValidator.validate(payPeriod);
+            payPeriodSettlementValidator.validate(payPeriod);
         });
         payPeriods.forEach(PayPeriod::startSettling);
 
