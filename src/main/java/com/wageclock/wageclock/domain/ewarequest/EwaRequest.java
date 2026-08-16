@@ -79,8 +79,8 @@ public class EwaRequest extends BaseEntity {
     public void unknown(){
         this.status = EwaRequestStatus.UNKNOWN;
     }
-    public void refundEwa(BigDecimal amount){
-        this.payPeriod.subtractEwaAmount(amount);
+    public Long getPayPeriodId(){
+        return payPeriod.getId();
     }
 
 }

@@ -3,6 +3,8 @@ package com.wageclock.wageclock.domain.ewatransfer;
 import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,11 +15,13 @@ public class EwaTransferProcessor {
 
     private final EwaTransferRepository ewaTransferRepository;
     private final EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository;
+    private final PayPeriodRepository payPeriodRepository;
 
-    public EwaTransferProcessor(EwaTransferRepository ewaTransferRepository, EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository){
+    public EwaTransferProcessor(EwaTransferRepository ewaTransferRepository, EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository, PayPeriodRepository payPeriodRepository){
 
         this.ewaTransferRepository = ewaTransferRepository;
         this.ewaTransferFailureOutBoxRepository = ewaTransferFailureOutBoxRepository;
+        this.payPeriodRepository = payPeriodRepository;
     }
 
     @Transactional
@@ -58,8 +62,10 @@ public class EwaTransferProcessor {
                 .orElseThrow(() -> new NotFoundException("Transfer not found"));
         ewaTransfer.failed();
         ewaTransfer.getEwaRequest().failed();
+        PayPeriod payPeriod = payPeriodRepository.findByIdWithLock(ewaTransfer.getEwaRequest().getPayPeriodId())
+                .orElseThrow(() -> new NotFoundException("PayPeriod not found"));
         // 요청 시점에 잡아둔 한도를 되돌린다 (이체가 나가지 않았음이 확정됨)
-        ewaTransfer.getEwaRequest().refundEwa(ewaTransfer.getAmount());
+        payPeriod.subtractEwaAmount(ewaTransfer.getAmount());
     }
 
     @Transactional
@@ -98,9 +104,11 @@ public class EwaTransferProcessor {
                 .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
         managed.failed();
         managed.getEwaRequest().failed();
+        PayPeriod payPeriod = payPeriodRepository.findByIdWithLock(managed.getEwaRequest().getPayPeriodId())
+                .orElseThrow(() -> new NotFoundException("PayPeriod not found"));
         // 요청 시점에 잡아둔 한도를 되돌린다.
         // 아웃박스가 FAILED 상태를 조기 종료 처리하므로 중복 차감되지 않는다.
-        managed.getEwaRequest().refundEwa(managed.getAmount());
+        payPeriod.subtractEwaAmount(managed.getAmount());
     }
 
     @Transactional

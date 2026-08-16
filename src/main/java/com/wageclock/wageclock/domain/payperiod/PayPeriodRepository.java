@@ -28,4 +28,12 @@ public interface PayPeriodRepository extends JpaRepository<PayPeriod, Long> {
             @Param("employerId") Long employerId);
 
     Optional<PayPeriod> findByEmployment_IdAndStatusIn(Long employmentId, List<PayPeriod.PayPeriodStatus> statuses);
+
+    // 금액 누계(totalEarnedAmount·totalEwaAmount)를 갱신하는 모든 경로가 이 락을 거친다.
+    // 퇴근·EWA 요청·거절·이체 실패 확정이 전부 읽고-고쳐-쓰기라, 락 없이 겹치면
+    // 나중에 커밋한 쪽이 앞선 변경을 덮어쓴다.
+    // 연관관계 체이닝(session.getPayPeriod())으로 꺼내면 락이 걸리지 않으므로 반드시 이 메서드로 조회한다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PayPeriod p WHERE p.id = :id")
+    Optional<PayPeriod> findByIdWithLock(@Param("id") Long payPeriodId);
 }
