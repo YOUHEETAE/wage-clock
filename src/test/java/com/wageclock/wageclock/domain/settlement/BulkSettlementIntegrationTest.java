@@ -1,6 +1,8 @@
 package com.wageclock.wageclock.domain.settlement;
 
 import com.wageclock.wageclock.domain.auth.UserRole;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
+import com.wageclock.wageclock.domain.ewarequest.EwaRequestDetailResponse;
 import com.wageclock.wageclock.domain.ewarequest.EwaRequestDto;
 import com.wageclock.wageclock.domain.ewarequest.EwaResponseDto;
 import com.wageclock.wageclock.domain.outbox.*;
@@ -378,6 +380,29 @@ public class BulkSettlementIntegrationTest extends IntegrationTestBase {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, response.getBody().size());
         assertEquals(PayPeriod.PayPeriodStatus.SETTLING, response.getBody().get(0).payPeriodStatus());
+    }
+
+    // 확정된 EWA는 정산을 막지 않으므로, 거절 이력이 남은 채로 정산에 들어갈 수 있다.
+    // 그때도 근로자가 자기 선지급 내역을 볼 수 있어야 한다.
+    @Test
+    void 정산_진행중에도_EWA_내역이_조회된다() {
+        testRestTemplate.postForEntity("/api/ewa-requests/request",
+                new HttpEntity<>(new EwaRequestDto(employmentId, BigDecimal.valueOf(500),
+                        UUID.randomUUID().toString()), authHeaders(workerToken)),
+                EwaResponseDto.class);
+        Long ewaRequestId = ewaRequestRepository.findAll().get(0).getId();
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaRequestId + "/reject",
+                new HttpEntity<>(null, authHeaders(employerToken)), EwaResponseDto.class);
+        requestSettlement();
+
+        ResponseEntity<List<EwaRequestDetailResponse>> response = testRestTemplate.exchange(
+                "/api/ewa-requests/my-requests?employmentId=" + employmentId, HttpMethod.GET,
+                new HttpEntity<>(null, authHeaders(workerToken)),
+                new ParameterizedTypeReference<>() {});
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(1, response.getBody().size());
+        assertEquals(EwaRequest.EwaRequestStatus.REJECTED, response.getBody().get(0).status());
     }
 
     @Test

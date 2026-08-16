@@ -6,7 +6,7 @@ import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEventRepository;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
-import com.wageclock.wageclock.domain.payperiod.PayPeriodCloseValidator;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodSettlementValidator;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
@@ -36,7 +36,8 @@ class BulkSettlementProcessorTest {
     @Mock BulkSettlementItemRepository bulkSettlementItemRepository;
     @Mock BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository;
     @Mock InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
-    @Mock PayPeriodCloseValidator payPeriodCloseValidator;
+    @Mock
+    PayPeriodSettlementValidator payPeriodSettlementValidator;
     @Mock EmploymentRepository employmentRepository;
     @InjectMocks BulkSettlementProcessor bulkSettlementProcessor;
 
@@ -95,7 +96,7 @@ class BulkSettlementProcessorTest {
         when(bulkSettlementItemRepository.existsByPayPeriod_IdAndBulkSettlement_StatusNotIn(anyLong(), anyList()))
                 .thenReturn(false);
         doThrow(new IllegalStateException("Working WorkSession exists"))
-                .when(payPeriodCloseValidator).validate(payPeriod1);
+                .when(payPeriodSettlementValidator).validate(payPeriod1);
 
         assertThrows(IllegalStateException.class,
                 () -> bulkSettlementProcessor.createBulkSettlement(List.of(1L, 2L), 1L));

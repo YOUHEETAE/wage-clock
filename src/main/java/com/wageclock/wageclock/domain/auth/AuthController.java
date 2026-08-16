@@ -8,6 +8,9 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final AuthService authService;
 
     public AuthController(AuthService authService) {
@@ -26,9 +29,12 @@ public class AuthController {
     }
     @Operation(summary = "로그아웃")
     @PostMapping("/logout")
-    public ResponseEntity<Object> logout(@RequestHeader("Authorization") String bearerToken) {
-        String token = bearerToken.substring(7);
-        authService.logout(token);
+    public ResponseEntity<Object> logout(
+            @RequestHeader(value = "Authorization", required = false) String bearerToken) {
+        // 헤더가 없거나 형식이 다르면 지울 토큰도 없다. 바로 자르면 문자열 예외로 500이 난다.
+        if (bearerToken != null && bearerToken.startsWith(BEARER_PREFIX)) {
+            authService.logout(bearerToken.substring(BEARER_PREFIX.length()));
+        }
         return ResponseEntity.ok().build();
     }
 }

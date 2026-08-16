@@ -22,13 +22,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PayPeriodCloseValidatorTest {
+class PayPeriodSettlementValidatorTest {
 
     @Mock WorkSessionRepository workSessionRepository;
     @Mock EwaRequestRepository ewaRequestRepository;
     @Mock EwaTransferRepository ewaTransferRepository;
     @Mock PayPeriod payPeriod;
-    @InjectMocks PayPeriodCloseValidator payPeriodCloseValidator;
+    @InjectMocks
+    PayPeriodSettlementValidator payPeriodSettlementValidator;
 
     private void 세션_없음() {
         when(payPeriod.getEmploymentId()).thenReturn(1L);
@@ -43,7 +44,7 @@ class PayPeriodCloseValidatorTest {
         when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L,
                 WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(true);
 
-        assertThrows(IllegalStateException.class, () -> payPeriodCloseValidator.validate(payPeriod));
+        assertThrows(IllegalStateException.class, () -> payPeriodSettlementValidator.validate(payPeriod));
     }
 
     // 정산 후 확정되면 totalEwaAmount가 바뀌어 이미 이체한 금액과 어긋난다
@@ -52,7 +53,7 @@ class PayPeriodCloseValidatorTest {
         세션_없음();
         when(ewaRequestRepository.existsByPayPeriodAndStatusNotIn(eq(payPeriod), anyList())).thenReturn(true);
 
-        assertThrows(IllegalStateException.class, () -> payPeriodCloseValidator.validate(payPeriod));
+        assertThrows(IllegalStateException.class, () -> payPeriodSettlementValidator.validate(payPeriod));
     }
 
     // EwaRequest가 APPROVED여도 이체가 진행 중이면 결과는 아직 미확정이다
@@ -63,7 +64,7 @@ class PayPeriodCloseValidatorTest {
         when(ewaTransferRepository.existsByEwaRequest_PayPeriodAndStatusNotIn(eq(payPeriod), anyList()))
                 .thenReturn(true);
 
-        assertThrows(IllegalStateException.class, () -> payPeriodCloseValidator.validate(payPeriod));
+        assertThrows(IllegalStateException.class, () -> payPeriodSettlementValidator.validate(payPeriod));
     }
 
     @Test
@@ -73,7 +74,7 @@ class PayPeriodCloseValidatorTest {
         when(ewaTransferRepository.existsByEwaRequest_PayPeriodAndStatusNotIn(eq(payPeriod), anyList()))
                 .thenReturn(false);
 
-        assertDoesNotThrow(() -> payPeriodCloseValidator.validate(payPeriod));
+        assertDoesNotThrow(() -> payPeriodSettlementValidator.validate(payPeriod));
     }
 
     // 확정 상태만 나열하고 나머지를 미확정으로 보므로, 새 상태가 생겨도 기본값이 "막는다"가 된다
@@ -85,7 +86,7 @@ class PayPeriodCloseValidatorTest {
                         EwaRequest.EwaRequestStatus.APPROVED,
                         EwaRequest.EwaRequestStatus.REJECTED)))).thenReturn(true);
 
-        assertThrows(IllegalStateException.class, () -> payPeriodCloseValidator.validate(payPeriod));
+        assertThrows(IllegalStateException.class, () -> payPeriodSettlementValidator.validate(payPeriod));
     }
 
     @Test
@@ -96,6 +97,6 @@ class PayPeriodCloseValidatorTest {
                 eq(List.of(EwaTransfer.EwaTransferStatus.FAILED,
                         EwaTransfer.EwaTransferStatus.COMPLETED)))).thenReturn(true);
 
-        assertThrows(IllegalStateException.class, () -> payPeriodCloseValidator.validate(payPeriod));
+        assertThrows(IllegalStateException.class, () -> payPeriodSettlementValidator.validate(payPeriod));
     }
 }
