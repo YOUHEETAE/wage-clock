@@ -3,6 +3,8 @@ package com.wageclock.wageclock.domain.ewatransfer;
 import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.EwaTransferFailureOutBoxRepository;
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -22,7 +24,16 @@ class EwaTransferProcessorTest {
 
     @Mock EwaTransferRepository ewaTransferRepository;
     @Mock EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository;
+    @Mock PayPeriodRepository payPeriodRepository;
     @InjectMocks EwaTransferProcessor ewaTransferProcessor;
+
+    /** 한도를 되돌리는 경로는 PayPeriod를 락으로 다시 조회한다. */
+    private PayPeriod stubLockedPayPeriod(EwaRequest ewaRequest) {
+        PayPeriod payPeriod = mock(PayPeriod.class);
+        when(ewaRequest.getPayPeriodId()).thenReturn(1L);
+        when(payPeriodRepository.findByIdWithLock(1L)).thenReturn(Optional.of(payPeriod));
+        return payPeriod;
+    }
 
     @Test
     void createEwaTransfer_PENDING_상태로_저장() {
@@ -57,9 +68,8 @@ class EwaTransferProcessorTest {
 
         verify(ewaTransfer).completed();
         verify(ewaRequest).approved();
-        // 요청 시점에 이미 더해졌으므로 성공 시에는 금액을 건드리지 않는다
-        verify(ewaRequest, never()).getPayPeriod();
-        verify(ewaRequest, never()).refundEwa(any());
+        // 요청 시점에 이미 더해졌으므로 성공 시에는 금액을 건드리지 않는다 — 조회조차 하지 않는다
+        verify(payPeriodRepository, never()).findByIdWithLock(any());
     }
 
     @Test
@@ -79,12 +89,13 @@ class EwaTransferProcessorTest {
         when(ewaTransfer.getEwaRequest()).thenReturn(ewaRequest);
         when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
+        PayPeriod payPeriod = stubLockedPayPeriod(ewaRequest);
 
         ewaTransferProcessor.failTransfer(1L);
 
         verify(ewaTransfer).failed();
         verify(ewaRequest).failed();
-        verify(ewaRequest).refundEwa(BigDecimal.valueOf(50000));
+        verify(payPeriod).subtractEwaAmount(BigDecimal.valueOf(50000));
     }
 
     @Test
@@ -131,8 +142,7 @@ class EwaTransferProcessorTest {
         verify(ewaTransfer).completed();
         verify(ewaRequest).approved();
         // 불능통지에서 되돌리지 않았으므로 재시도 성공 시에도 다시 더하지 않는다
-        verify(ewaRequest, never()).getPayPeriod();
-        verify(ewaRequest, never()).refundEwa(any());
+        verify(payPeriodRepository, never()).findByIdWithLock(any());
     }
 
     @Test
@@ -143,11 +153,13 @@ class EwaTransferProcessorTest {
         when(ewaTransfer.getAmount()).thenReturn(BigDecimal.valueOf(50000));
         when(ewaTransferRepository.findById(1L)).thenReturn(Optional.of(ewaTransfer));
 
+        PayPeriod payPeriod = stubLockedPayPeriod(ewaRequest);
+
         ewaTransferProcessor.failRetry(1L);
 
         verify(ewaTransfer).failed();
         verify(ewaRequest).failed();
-        verify(ewaRequest).refundEwa(BigDecimal.valueOf(50000));
+        verify(payPeriod).subtractEwaAmount(BigDecimal.valueOf(50000));
     }
 
     @Test

@@ -112,7 +112,8 @@ public class EwaRequestProcessorTest {
         when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.of(ewaRequest));
         when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING, EwaRequest.EwaRequestStatus.REJECTED);
         when(ewaRequest.getEmployerId()).thenReturn(1L);
-        when(ewaRequest.getPayPeriod()).thenReturn(payPeriod);
+        when(ewaRequest.getPayPeriodId()).thenReturn(10L);
+        when(payPeriodRepository.findByIdWithLock(10L)).thenReturn(Optional.of(payPeriod));
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
         when(ewaRequest.getId()).thenReturn(1L);
 

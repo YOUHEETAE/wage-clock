@@ -68,7 +68,9 @@ public class WorkSessionService {
             throw new UnauthorizedException("unauthorized");
         }
         workSession.clockOut();
-        workSession.getPayPeriod().addEarnedAmount(workSession.getEarnedAmount());
+        PayPeriod payPeriod = payPeriodRepository.findByIdWithLock(workSession.getPayPeriodId())
+                        .orElseThrow(() -> new NotFoundException("PayPeriod not found"));
+        payPeriod.addEarnedAmount(workSession.getEarnedAmount());
         return new ClockOutResponse(workSession.getClockOut(), workSession.getEarnedAmount());
     }
     @Transactional

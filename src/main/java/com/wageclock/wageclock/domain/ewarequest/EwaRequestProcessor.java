@@ -68,30 +68,39 @@ public class EwaRequestProcessor {
                 ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
     }
 
-    private EwaRequest validateAndLockEwa(Long ewaRequestId, Long employerId){
-        EwaRequest ewaRequest = ewaRequestRepository.findByIdWithLock(ewaRequestId)
+    @Transactional
+    public EwaResponseDto validateAndRejectEwa(Long ewaRequestId, Long employerId){
+        EwaRequest ewaRequest = lockEwa(ewaRequestId);
+        // 검증보다 먼저 잠근다. validateEwa의 getEmployerId()가 PayPeriod 프록시를 초기화하는데,
+        // 그 뒤에 락을 잡으면 영속성 컨텍스트가 이미 들고 있는 값을 돌려주므로
+        // 락 획득 전의 금액에서 차감하게 된다.
+        PayPeriod payPeriod = payPeriodRepository.findByIdWithLock(ewaRequest.getPayPeriodId())
+                .orElseThrow(() -> new NotFoundException("PayPeriod Not Found"));
+        validateEwa(ewaRequest, employerId);
+        ewaRequest.rejected();
+        payPeriod.subtractEwaAmount(ewaRequest.getRequestedAmount());
+        return new EwaResponseDto(ewaRequest.getId(), ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
+    }
+
+    @Transactional
+    public EwaRequest validateAndMarkProcessing(Long ewaRequestId, Long employerId){
+        EwaRequest ewaRequest = lockEwa(ewaRequestId);
+        validateEwa(ewaRequest, employerId);
+        ewaRequest.processing();
+        return ewaRequest;
+    }
+
+    private EwaRequest lockEwa(Long ewaRequestId){
+        return ewaRequestRepository.findByIdWithLock(ewaRequestId)
                 .orElseThrow(() -> new NotFoundException("Invalid request Id"));
+    }
+
+    private void validateEwa(EwaRequest ewaRequest, Long employerId){
         if(ewaRequest.getStatus() != EwaRequest.EwaRequestStatus.PENDING){
             throw new IllegalStateException("EWA request is not in PENDING status");
         }
         if(!ewaRequest.getEmployerId().equals(employerId)){
             throw new UnauthorizedException("Invalid employer Id");
         }
-        return ewaRequest;
-    }
-
-    @Transactional
-    public EwaResponseDto validateAndRejectEwa(Long ewaRequestId, Long employerId){
-        EwaRequest ewaRequest = validateAndLockEwa(ewaRequestId, employerId);
-        ewaRequest.rejected();
-        ewaRequest.getPayPeriod().subtractEwaAmount(ewaRequest.getRequestedAmount());
-        return new EwaResponseDto(ewaRequest.getId(), ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
-    }
-
-    @Transactional
-    public EwaRequest validateAndMarkProcessing(Long ewaRequestId, Long employerId){
-        EwaRequest ewaRequest = validateAndLockEwa(ewaRequestId, employerId);
-        ewaRequest.processing();
-        return ewaRequest;
     }
 }

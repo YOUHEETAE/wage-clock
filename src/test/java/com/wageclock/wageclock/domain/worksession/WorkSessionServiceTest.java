@@ -119,7 +119,8 @@ public class WorkSessionServiceTest {
     @Test
     void clockOut_정상_응답_반환() {
         LocalDateTime clockOutTime = LocalDateTime.now();
-        when(savedWorkSession.getPayPeriod()).thenReturn(payPeriod);
+        when(savedWorkSession.getPayPeriodId()).thenReturn(10L);
+        when(payPeriodRepository.findByIdWithLock(10L)).thenReturn(Optional.of(payPeriod));
         when(workSessionRepository.findById(1L)).thenReturn(Optional.of(savedWorkSession));
         when(savedWorkSession.getWorkerId()).thenReturn(1L);
         when(savedWorkSession.getClockOut()).thenReturn(clockOutTime);
@@ -149,7 +150,8 @@ public class WorkSessionServiceTest {
     void clockOut_PayPeriod_earnedAmount_업데이트() {
         when(workSessionRepository.findById(1L)).thenReturn(Optional.of(savedWorkSession));
         when(savedWorkSession.getWorkerId()).thenReturn(1L);
-        when(savedWorkSession.getPayPeriod()).thenReturn(payPeriod);
+        when(savedWorkSession.getPayPeriodId()).thenReturn(10L);
+        when(payPeriodRepository.findByIdWithLock(10L)).thenReturn(Optional.of(payPeriod));
         when(savedWorkSession.getEarnedAmount()).thenReturn(BigDecimal.valueOf(50000));
 
         workSessionService.clockOut(new ClockOutRequest(1L), 1L);

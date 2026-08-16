@@ -92,6 +92,7 @@ public class WorkSession extends BaseEntity {
     public Long getWorkerId(){
         return employment.getWorker().getId();
     }
+    public Long getPayPeriodId(){return payPeriod.getId();}
 
     public void pause(){
         if(isCompleted()){
@@ -100,10 +101,10 @@ public class WorkSession extends BaseEntity {
         this.earnedAmount = getCurrentEarnedAmount();
         this.status = WorkSessionStatus.PAUSED;
     }
-    public void resume(){
+    public void resume() {
         // PAUSED에서만 허용 — WORKING에서 재개하면 lastResumeAt이 현재로 밀려
         // 그동안 쌓인 적립분이 사라지고, COMPLETED에서 재개하면 퇴근 시 이중 계상된다
-        if(!isPaused()){
+        if (!isPaused()) {
             throw new IllegalStateException("Work session is not paused");
         }
         this.status = WorkSessionStatus.WORKING;
