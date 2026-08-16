@@ -30,18 +30,12 @@ class InterBankFailureOutBoxProcessorTest {
                 .build();
     }
 
-    BulkSettlementItem buildMockItem() {
-        BulkSettlementItem item = mock(BulkSettlementItem.class);
-        when(item.getId()).thenReturn(10L);
-        return item;
-    }
 
     @Test
     void applyResult_성공_completeRetry_이벤트_PROCESSED_저장() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildMockItem();
 
-        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult("TX-002", null, null), event, item);
+        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult("TX-002", null, null), event, 10L);
 
         verify(bulkSettlementProcessor).completeRetry(10L);
         assertEquals(InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.PROCESSED, event.getStatus());
@@ -51,9 +45,8 @@ class InterBankFailureOutBoxProcessorTest {
     @Test
     void applyResult_VTIM_markPendingInquiry_이벤트_저장_없음() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildMockItem();
 
-        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult(null, "TX-002", null), event, item);
+        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult(null, "TX-002", null), event, 10L);
 
         verify(bulkSettlementProcessor).markPendingInquiry(10L);
         assertEquals(InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.PENDING, event.getStatus());
@@ -63,9 +56,8 @@ class InterBankFailureOutBoxProcessorTest {
     @Test
     void applyResult_확정실패_failItem_이벤트_FAILED_저장() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildMockItem();
 
-        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, "계좌 없음"), event, item);
+        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, "계좌 없음"), event, 10L);
 
         verify(bulkSettlementProcessor).failItem(10L);
         assertEquals(InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.FAILED, event.getStatus());
@@ -75,9 +67,8 @@ class InterBankFailureOutBoxProcessorTest {
     @Test
     void applyResult_UNKNOWN_retryCount증가_unknownItem_저장() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildMockItem();
 
-        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, null), event, item);
+        interBankFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, null), event, 10L);
 
         assertEquals(1, event.getRetryCount());
         verify(bulkSettlementProcessor).unknownItem(10L);
@@ -87,9 +78,8 @@ class InterBankFailureOutBoxProcessorTest {
     @Test
     void handleRetryOrFail_MAX_RETRY_미만_unknownItem_retryCount증가() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildMockItem();
 
-        interBankFailureOutBoxProcessor.handleRetryOrFail(event, item);
+        interBankFailureOutBoxProcessor.handleRetryOrFail(event, 10L);
 
         assertEquals(1, event.getRetryCount());
         verify(bulkSettlementProcessor).unknownItem(10L);
@@ -100,12 +90,11 @@ class InterBankFailureOutBoxProcessorTest {
     @Test
     void handleRetryOrFail_MAX_RETRY_도달_failItem_이벤트_FAILED() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildMockItem();
         for (int i = 0; i < 4; i++) {
             event.incrementRetryCount();
         }
 
-        interBankFailureOutBoxProcessor.handleRetryOrFail(event, item);
+        interBankFailureOutBoxProcessor.handleRetryOrFail(event, 10L);
 
         assertEquals(InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.FAILED, event.getStatus());
         verify(bulkSettlementProcessor).failItem(10L);
@@ -116,9 +105,8 @@ class InterBankFailureOutBoxProcessorTest {
     @Test
     void handlePrepareRetryOrFail_MAX_RETRY_미만_상태_PENDING_유지_저장() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = mock(BulkSettlementItem.class);
 
-        interBankFailureOutBoxProcessor.handlePrepareRetryOrFail(event, item);
+        interBankFailureOutBoxProcessor.handlePrepareRetryOrFail(event, 10L);
 
         assertEquals(1, event.getRetryCount());
         assertEquals(InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.PENDING, event.getStatus());
@@ -129,12 +117,11 @@ class InterBankFailureOutBoxProcessorTest {
     @Test
     void handlePrepareRetryOrFail_MAX_RETRY_도달_failItem_저장() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildMockItem();
         for (int i = 0; i < 4; i++) {
             event.incrementRetryCount();
         }
 
-        interBankFailureOutBoxProcessor.handlePrepareRetryOrFail(event, item);
+        interBankFailureOutBoxProcessor.handlePrepareRetryOrFail(event, 10L);
 
         assertEquals(InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.FAILED, event.getStatus());
         verify(bulkSettlementProcessor).failItem(10L);

@@ -21,9 +21,16 @@ public class EwaTransferService {
         this.ewaTransferProcessor = ewaTransferProcessor;
     }
 
-    public EwaRequest.EwaRequestStatus processTransfer(EwaRequest ewaRequest) {
-        EwaTransfer ewaTransfer = ewaTransferProcessor.createEwaTransfer(ewaRequest);
-        Long ewaTransferId = ewaTransfer.getId();
+    public EwaRequest.EwaRequestStatus processTransfer(Long ewaRequestId) {
+        EwaTransferContext ewaTransferContext = ewaTransferProcessor.createEwaTransfer(ewaRequestId);
+        Long ewaTransferId = ewaTransferContext.ewaTransferId();
+        // 보낼 수 없는 건에 전문번호를 발급할 이유가 없으므로 발급 전에 막는다.
+        // 돈이 나가지 않은 것이 확실하므로 확정 실패로 떨어뜨려 한도를 되돌린다.
+        if (!ewaTransferContext.transferAccount().isRegistered()) {
+            log.error("계좌 정보 미등록 ewaTransferId={}", ewaTransferId);
+            ewaTransferProcessor.failTransfer(ewaTransferId);
+            return EwaRequest.EwaRequestStatus.FAILED;
+        }
         String messageNo;
         try {
             messageNo = issueTransferMessageNo(ewaTransferId);
@@ -33,10 +40,11 @@ public class EwaTransferService {
             return EwaRequest.EwaRequestStatus.FAILED;
         }
         try{
-            WageTransferResult result = wageTransferPort.transfer(ewaTransfer.getWorker(), ewaTransfer.getAmount(), messageNo);
+            WageTransferResult result = wageTransferPort.transfer(ewaTransferContext.transferAccount(),
+                    ewaTransferContext.amount(), messageNo);
             return applyTransferStatus(result, ewaTransferId);
         }catch (Exception e){
-            log.error("이체 처리 실패 EwaTransferId={}", ewaTransfer.getId(), e);
+            log.error("이체 처리 실패 EwaTransferId={}", ewaTransferId, e);
             ewaTransferProcessor.unknownTransfer(ewaTransferId);
             return EwaRequest.EwaRequestStatus.UNKNOWN;
         }
@@ -46,13 +54,13 @@ public class EwaTransferService {
         ewaTransferProcessor.receiveInterBankFailure(transferId);
     }
 
-    public void inquiryTransfer(EwaTransfer ewaTransfer) {
-        Long ewaTransferId = ewaTransfer.getId();
+    public void inquiryTransfer(EwaTransferInquiryContext context) {
+        Long ewaTransferId = context.ewaTransferId();
        try {
-           WageTransferResult result = wageTransferPort.inquireTransfer(ewaTransfer.getMessageNo());
+           WageTransferResult result = wageTransferPort.inquireTransfer(context.messageNo());
            applyTransferStatus(result, ewaTransferId);
        }catch (Exception e){
-           log.error("이체 결과 조회 실패 EwaTransferId={}", ewaTransfer.getId(), e);
+           log.error("이체 결과 조회 실패 EwaTransferId={}", ewaTransferId, e);
            ewaTransferProcessor.unknownTransfer(ewaTransferId);
        }
     }

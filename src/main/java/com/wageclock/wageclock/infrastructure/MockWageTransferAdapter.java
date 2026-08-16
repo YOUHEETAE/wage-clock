@@ -1,9 +1,9 @@
 package com.wageclock.wageclock.infrastructure;
 
+import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
-import com.wageclock.wageclock.domain.worker.Worker;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +22,7 @@ public class MockWageTransferAdapter implements WageTransferPort {
     }
 
     @Override
-    public WageTransferResult transfer(Worker worker, BigDecimal amount, String messageNo) {
+    public WageTransferResult transfer(TransferAccount transferAccount, BigDecimal amount, String messageNo) {
         return new WageTransferResult("mock-transfer-" + messageNo, null, null);
     }
 

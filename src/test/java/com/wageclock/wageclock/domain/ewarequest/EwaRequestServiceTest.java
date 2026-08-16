@@ -31,7 +31,7 @@ public class EwaRequestServiceTest {
     void 정상_승인() {
         when(ewaRequestProcessor.validateAndMarkProcessing(1L, 1L)).thenReturn(ewaRequest);
         when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
-        when(ewaTransferService.processTransfer(ewaRequest)).thenReturn(EwaRequest.EwaRequestStatus.APPROVED);
+        when(ewaTransferService.processTransfer(1L)).thenReturn(EwaRequest.EwaRequestStatus.APPROVED);
 
         InitiateEwaResponse response = ewaRequestService.initiateEwa(1L, 1L);
 

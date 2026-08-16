@@ -1,9 +1,9 @@
 package com.wageclock.wageclock.infrastructure;
 
+import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
-import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.global.exception.ExternalApiException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -29,8 +29,8 @@ public class FirmBankingWageTransferAdapter implements WageTransferPort {
     }
 
     @Override
-    public WageTransferResult transfer(Worker worker, BigDecimal amount, String messageNo) {
-        HectoFinancialTransferResponse response = firmBankingService.transfer(worker, amount, messageNo);
+    public WageTransferResult transfer(TransferAccount transferAccount, BigDecimal amount, String messageNo) {
+        HectoFinancialTransferResponse response = firmBankingService.transfer(transferAccount, amount, messageNo);
         if (SUCCESS_CODE.equals(response.responseCode())) {
             return new WageTransferResult(response.messageNo(), null, null);
         }

@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.settlement;
 
 import com.wageclock.wageclock.domain.employer.EmployerRepository;
+import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
@@ -31,6 +32,9 @@ class BulkSettlementServiceTest {
     @Mock WorkerRepository workerRepository;
     BulkSettlementService bulkSettlementService;
 
+    private static final TransferAccount REGISTERED_ACCOUNT =
+            new TransferAccount("004", "1234-5678", "박사원");
+
     @BeforeEach
     void setUp() {
         bulkSettlementService = new BulkSettlementService(
@@ -53,14 +57,11 @@ class BulkSettlementServiceTest {
 
     @Test
     void initiateBulkSettlement_전체_성공_completeSettlement() {
-        Worker worker = mock(Worker.class);
-        when(worker.getId()).thenReturn(1L);
-        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), REGISTERED_ACCOUNT, 10L, null);
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
-        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-001");
-        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), eq("TX-001")))
+        when(wageTransferPort.transfer(eq(REGISTERED_ACCOUNT), eq(BigDecimal.valueOf(50000)), eq("TX-001")))
                 .thenReturn(new WageTransferResult("TX-001", null, null));
 
         bulkSettlementService.initiateBulkSettlement("BULK-001");
@@ -72,13 +73,10 @@ class BulkSettlementServiceTest {
 
     @Test
     void initiateBulkSettlement_VTIM_markPendingInquiry_failSettlement() {
-        Worker worker = mock(Worker.class);
-        when(worker.getId()).thenReturn(1L);
-        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), REGISTERED_ACCOUNT, 10L, null);
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
-        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
-        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), any()))
+        when(wageTransferPort.transfer(eq(REGISTERED_ACCOUNT), eq(BigDecimal.valueOf(50000)), any()))
                 .thenReturn(new WageTransferResult(null, "MSG-001", null));
 
         bulkSettlementService.initiateBulkSettlement("BULK-001");
@@ -89,12 +87,9 @@ class BulkSettlementServiceTest {
 
     @Test
     void initiateBulkSettlement_이체실패_failItem_failSettlement() {
-        Worker worker = mock(Worker.class);
-        when(worker.getId()).thenReturn(1L);
-        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), REGISTERED_ACCOUNT, 10L, null);
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
-        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
         when(wageTransferPort.transfer(any(), any(), any()))
                 .thenThrow(new RuntimeException("이체 실패"));
 
@@ -105,11 +100,11 @@ class BulkSettlementServiceTest {
     }
 
     @Test
-    void initiateBulkSettlement_워커없음_failItem_failSettlement() {
-        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+    void initiateBulkSettlement_계좌_미등록_failItem_failSettlement() {
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000),
+                new TransferAccount(null, null, null), 10L, null);
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
-        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of());
 
         bulkSettlementService.initiateBulkSettlement("BULK-001");
 
@@ -120,12 +115,9 @@ class BulkSettlementServiceTest {
 
     @Test
     void initiateBulkSettlement_prepareTransfer실패_Retryable_상태변경없음() {
-        Worker worker = mock(Worker.class);
-        when(worker.getId()).thenReturn(1L);
-        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), REGISTERED_ACCOUNT, 10L, null);
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
-        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT))
                 .thenThrow(new RuntimeException("Redis 장애"));
 
@@ -140,14 +132,11 @@ class BulkSettlementServiceTest {
 
     @Test
     void initiateBulkSettlement_모호한결과_unknownItem_failSettlement() {
-        Worker worker = mock(Worker.class);
-        when(worker.getId()).thenReturn(1L);
-        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, null);
+        BulkSettlementItemContext context = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), REGISTERED_ACCOUNT, 10L, null);
         when(bulkSettlementProcessor.loadItemContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(context)));
-        when(workerRepository.findAllById(List.of(1L))).thenReturn(List.of(worker));
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-001");
-        when(wageTransferPort.transfer(eq(worker), eq(BigDecimal.valueOf(50000)), eq("TX-001")))
+        when(wageTransferPort.transfer(eq(REGISTERED_ACCOUNT), eq(BigDecimal.valueOf(50000)), eq("TX-001")))
                 .thenReturn(new WageTransferResult(null, null, null));
 
         bulkSettlementService.initiateBulkSettlement("BULK-001");
@@ -158,7 +147,7 @@ class BulkSettlementServiceTest {
 
     @Test
     void retrySettlement_PENDING_INQUIRY_성공_completeItem() {
-        BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "MSG-001");
+        BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), null, 10L, "MSG-001");
         when(bulkSettlementProcessor.claimForTransfer("BULK-001")).thenReturn(true);
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
@@ -174,7 +163,7 @@ class BulkSettlementServiceTest {
 
     @Test
     void retrySettlement_PENDING_INQUIRY_VTIM_markPendingInquiry() {
-        BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "MSG-001");
+        BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), null, 10L, "MSG-001");
         when(bulkSettlementProcessor.claimForTransfer("BULK-001")).thenReturn(true);
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));
@@ -190,7 +179,7 @@ class BulkSettlementServiceTest {
 
     @Test
     void retrySettlement_PENDING_INQUIRY_예외_unknownItem() {
-        BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), 10L, "MSG-001");
+        BulkSettlementItemContext inquiryContext = new BulkSettlementItemContext(1L, BigDecimal.valueOf(50000), null, 10L, "MSG-001");
         when(bulkSettlementProcessor.claimForTransfer("BULK-001")).thenReturn(true);
         when(bulkSettlementProcessor.loadPendingInquiryContexts("BULK-001"))
                 .thenReturn(new BulkSettlementContext(1L, List.of(inquiryContext)));

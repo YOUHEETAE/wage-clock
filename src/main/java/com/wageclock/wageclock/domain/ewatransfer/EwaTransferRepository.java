@@ -23,12 +23,7 @@ public interface EwaTransferRepository extends JpaRepository<EwaTransfer, Long> 
     Optional<EwaTransfer> findByIdWithWorker(@Param("id") Long id);
 
 
-    @EntityGraph(attributePaths = {
-            "ewaRequest",
-            "ewaRequest.payPeriod",
-            "ewaRequest.payPeriod.employment",
-            "ewaRequest.payPeriod.employment.worker"
-    })
+    // 조회 대상은 전문번호만 쓰므로 연관관계를 함께 가져오지 않는다
     List<EwaTransfer> findByStatusIn(List<EwaTransfer.EwaTransferStatus> status);
 
     boolean existsByEwaRequest_PayPeriodAndStatusNotIn(PayPeriod payPeriod, List<EwaTransfer.EwaTransferStatus> statuses);

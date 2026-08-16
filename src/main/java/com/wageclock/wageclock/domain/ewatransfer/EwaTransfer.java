@@ -69,7 +69,4 @@ public class EwaTransfer extends BaseEntity {
     public void retrying(){
         this.status = EwaTransferStatus.RETRYING;
     }
-    public Long getWorkerId(){
-        return this.ewaRequest.getWorker().getId();
-    }
 }
