@@ -15,6 +15,10 @@ public class DashboardRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * 사업장 대시보드 조회. 여러 테이블을 집계해 화면용 DTO로 바로 내리므로 JdbcTemplate을 쓴다.
+     * 대응하는 엔티티가 없고, 읽고 버릴 목록을 영속성 컨텍스트에 올릴 이유도 없다.
+     */
     public List<DashboardResponse> getDashboard(Long workplaceId) {
         String sql = """
                 SELECT
