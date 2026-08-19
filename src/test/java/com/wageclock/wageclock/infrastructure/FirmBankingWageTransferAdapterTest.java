@@ -1,7 +1,7 @@
 package com.wageclock.wageclock.infrastructure;
 
+import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
-import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.global.exception.ExternalApiException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,8 +24,10 @@ import static org.mockito.Mockito.when;
 class FirmBankingWageTransferAdapterTest {
 
     @Mock FirmBankingService firmBankingService;
-    @Mock Worker worker;
     @InjectMocks FirmBankingWageTransferAdapter adapter;
+
+    private static final TransferAccount ACCOUNT =
+            new TransferAccount("004", "1234-5678", "박사원");
 
     // --- 2000/100 지급이체 ---
 
@@ -34,7 +36,7 @@ class FirmBankingWageTransferAdapterTest {
         when(firmBankingService.transfer(any(), any(), any()))
                 .thenReturn(new HectoFinancialTransferResponse("0000", "1TX001"));
 
-        WageTransferResult result = adapter.transfer(worker, BigDecimal.valueOf(50000), "1TX001");
+        WageTransferResult result = adapter.transfer(ACCOUNT, BigDecimal.valueOf(50000), "1TX001");
 
         assertEquals(WageTransferResult.ResultType.SUCCESS, result.classify());
         assertEquals("1TX001", result.transferId());
@@ -45,7 +47,7 @@ class FirmBankingWageTransferAdapterTest {
         when(firmBankingService.transfer(any(), any(), any()))
                 .thenReturn(new HectoFinancialTransferResponse("VTIM", "1TX001"));
 
-        WageTransferResult result = adapter.transfer(worker, BigDecimal.valueOf(50000), "1TX001");
+        WageTransferResult result = adapter.transfer(ACCOUNT, BigDecimal.valueOf(50000), "1TX001");
 
         assertEquals(WageTransferResult.ResultType.PENDING_INQUIRY, result.classify());
         assertEquals("1TX001", result.pendingMessageNo());
@@ -57,7 +59,7 @@ class FirmBankingWageTransferAdapterTest {
         when(firmBankingService.transfer(any(), any(), any()))
                 .thenReturn(new HectoFinancialTransferResponse("E001", "1TX001"));
 
-        WageTransferResult result = adapter.transfer(worker, BigDecimal.valueOf(50000), "1TX001");
+        WageTransferResult result = adapter.transfer(ACCOUNT, BigDecimal.valueOf(50000), "1TX001");
 
         assertEquals(WageTransferResult.ResultType.PENDING_INQUIRY, result.classify());
     }

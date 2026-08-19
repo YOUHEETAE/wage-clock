@@ -12,6 +12,7 @@ import com.wageclock.wageclock.domain.ewarequest.EwaRequestRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.port.VirtualAccountPort;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
+import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.workplace.WorkplaceRepository;
 import com.wageclock.wageclock.domain.workplace.WorkplaceRequest;
@@ -68,9 +69,22 @@ public abstract class IntegrationTestBase {
     @Autowired protected EwaRequestRepository ewaRequestRepository;
     @Autowired protected WorkplaceRepository workplaceRepository;
 
+    /**
+     * 근로자는 계좌 정보까지 등록된 상태로 만든다.
+     * 이체 경로가 계좌 미등록을 확정 실패로 처리하므로, 등록하지 않으면 EWA·정산이 모두 FAILED가 된다.
+     */
     protected void signUp(String name, String email, UserRole role) {
         testRestTemplate.postForEntity("/api/auth/sign-up",
                 new SignupRequest(name, email, "password", role), Void.class);
+        if (role == UserRole.WORKER) {
+            registerAccountInfo(email, name);
+        }
+    }
+
+    protected void registerAccountInfo(String workerEmail, String accountHolder) {
+        Worker worker = workerRepository.findByEmail(workerEmail).orElseThrow();
+        worker.registerAccountInfo("1234-5678", "004", accountHolder);
+        workerRepository.save(worker);
     }
 
     protected String login(String email) {

@@ -8,6 +8,7 @@ import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEventReposito
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodSettlementValidator;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
+import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.NotFoundException;
@@ -134,6 +135,16 @@ public class BulkSettlementProcessor {
         bulkSettlementItem.unknown();
     }
 
+    /** 타행이체불능 재처리에 필요한 값을 트랜잭션 안에서 확정한다. */
+    @Transactional(readOnly = true)
+    public BulkSettlementItemRetryContext loadRetryContext(Long itemId) {
+        BulkSettlementItem item = bulkSettlementItemRepository.findByIdWithWorker(itemId)
+                .orElseThrow(() -> new NotFoundException("BulkSettlementItem Not Found"));
+        return new BulkSettlementItemRetryContext(item.getId(), item.getStatus(),
+                item.getAmount(), item.getMessageNo(),
+                item.getWorker().toTransferAccount());
+    }
+
     @Transactional
     public void assignMessageNo(Long itemId, String messageNo) {
         BulkSettlementItem bulkSettlementItem =  bulkSettlementItemRepository.findById(itemId)
@@ -141,6 +152,10 @@ public class BulkSettlementProcessor {
         bulkSettlementItem.assignMessageNo(messageNo);
     }
 
+    /**
+     * 이체 대상을 컨텍스트로 뽑는다. 이체는 별도 스레드에서 트랜잭션 없이 돌기 때문에
+     * 계좌를 여기서 값으로 확정해 넘긴다. 연관관계는 조회 쿼리의 @EntityGraph가 함께 가져온다.
+     */
     @Transactional
     public BulkSettlementContext loadItemContexts(String portOnePaymentId) {
         List<BulkSettlementItem> items = bulkSettlementItemRepository
@@ -153,6 +168,7 @@ public class BulkSettlementProcessor {
         }
         List<BulkSettlementItemContext> itemContexts = items.stream()
                 .map(item -> new BulkSettlementItemContext(item.getWorkerId(), item.getAmount(),
+                        item.getWorker().toTransferAccount(),
                         item.getId(), item.getMessageNo()))
                 .toList();
         return new BulkSettlementContext(items.getFirst().getBulkSettlement().getId(), itemContexts);
@@ -171,7 +187,7 @@ public class BulkSettlementProcessor {
         }
         List<BulkSettlementItemContext> itemContexts = items.stream()
                 .map(item -> new BulkSettlementItemContext(item.getWorkerId(), item.getAmount(),
-                        item.getId(), item.getMessageNo()))
+                        null ,item.getId(), item.getMessageNo()))
                 .toList();
         return new BulkSettlementContext(items.getFirst().getBulkSettlement().getId(), itemContexts);
     }

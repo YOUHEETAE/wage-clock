@@ -100,14 +100,9 @@ public class BulkSettlementService {
             }
             return;
         }
-        List<Long> workerIds = contexts.bulkSettlementItemContexts().stream()
-                .map(BulkSettlementItemContext::workerId).toList();
-        Map<Long, Worker> workerMap = workerRepository.findAllById(workerIds).stream()
-                .collect(Collectors.toMap(Worker::getId, Function.identity()));
-
         List<CompletableFuture<TransferItemResult>> futures = contexts.bulkSettlementItemContexts().stream()
                 .map(context -> CompletableFuture.<TransferItemResult>supplyAsync(() ->
-                                processItem(context, workerMap), settlementExecutor)
+                                processItem(context), settlementExecutor)
                         .orTimeout(30, TimeUnit.SECONDS)
                         .exceptionally(e -> handleTransferException(e, context.itemId()))).toList();
         List<TransferItemResult> results = futures.stream()
@@ -197,12 +192,10 @@ public class BulkSettlementService {
             case TransferItemResult.Retryable r -> {}
         }
     }
-    private TransferItemResult processItem(BulkSettlementItemContext context,
-                                           Map<Long, Worker> workerMap){
-        Worker worker = workerMap.get(context.workerId());
-        if (worker == null) {
-            log.error("Worker not found itemId={}, workerId={}", context.itemId(), context.workerId());
-            return new TransferItemResult.Fail(context.itemId(), "Worker not found");
+    private TransferItemResult processItem(BulkSettlementItemContext context){
+        if (!context.hasRegisteredAccount()) {
+            log.error("계좌 정보 미등록 itemId={}, workerId={}", context.itemId(), context.workerId());
+            return new TransferItemResult.Fail(context.itemId(), "계좌 정보 미등록");
         }
         String messageNo;
         try {
@@ -212,7 +205,7 @@ public class BulkSettlementService {
             //todo : 아웃박스 재시도 소진(MAX_RETRY 초과 → FAILED) 시 운영팀 알림 필요
             return new TransferItemResult.Retryable(context.itemId());
         }
-        WageTransferResult result = wageTransferPort.transfer(worker, context.amount(), messageNo);
+        WageTransferResult result = wageTransferPort.transfer(context.transferAccount(), context.amount(), messageNo);
         return toTransferItemResult(result, context);
     }
     private TransferItemResult handleTransferException(Throwable e, Long itemId) {

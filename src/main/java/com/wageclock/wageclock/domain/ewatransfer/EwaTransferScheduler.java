@@ -10,23 +10,22 @@ import java.util.List;
 @Slf4j
 public class EwaTransferScheduler {
 
-    private final EwaTransferRepository ewaTransferRepository;
+    private final EwaTransferProcessor ewaTransferProcessor;
     private final EwaTransferService ewaTransferService;
 
-    public EwaTransferScheduler(EwaTransferRepository ewaTransferRepository, EwaTransferService ewaTransferService) {
-        this.ewaTransferRepository = ewaTransferRepository;
+    public EwaTransferScheduler(EwaTransferProcessor ewaTransferProcessor, EwaTransferService ewaTransferService) {
+        this.ewaTransferProcessor = ewaTransferProcessor;
         this.ewaTransferService = ewaTransferService;
     }
 
     @Scheduled(fixedDelay = 300000)
     public void retryPendingInquiryTransfer(){
-        List<EwaTransfer> ewaTransfers = ewaTransferRepository
-                .findByStatusIn(List.of(EwaTransfer.EwaTransferStatus.PENDING_INQUIRY, EwaTransfer.EwaTransferStatus.UNKNOWN));
-        for(EwaTransfer ewaTransfer : ewaTransfers){
+        List<EwaTransferInquiryContext> contexts = ewaTransferProcessor.loadInquiryContexts();
+        for(EwaTransferInquiryContext context : contexts){
             try {
-                ewaTransferService.inquiryTransfer(ewaTransfer);
+                ewaTransferService.inquiryTransfer(context);
             }catch (Exception e){
-                log.warn("Failed to retry ewaTransfer: {}", ewaTransfer.getId(), e);
+                log.warn("Failed to retry ewaTransfer: {}", context.ewaTransferId(), e);
             }
         }
     }

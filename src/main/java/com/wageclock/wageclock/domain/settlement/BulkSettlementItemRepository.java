@@ -14,6 +14,14 @@ public interface BulkSettlementItemRepository extends JpaRepository<BulkSettleme
             Long payPeriodId,
             List<BulkSettlement.BulkSettlementStatus> statuses
     );
+    // 컨텍스트를 만들 때 아이템마다 worker 프록시를 깨우면 N+1이 된다.
+    // 단일 연관만 타므로 조인해도 행이 곱해지지 않는다.
+    @EntityGraph(attributePaths = {
+            "bulkSettlement",
+            "payPeriod",
+            "payPeriod.employment",
+            "payPeriod.employment.worker"
+    })
     List<BulkSettlementItem> findByBulkSettlement_PortOnePaymentIdAndStatusIn(
             String portOnePaymentId,
             List<BulkSettlementItem.BulkSettlementItemStatus> statuses
@@ -26,7 +34,7 @@ public interface BulkSettlementItemRepository extends JpaRepository<BulkSettleme
             "JOIN FETCH pp.employment emp " +
             "JOIN FETCH emp.worker " +
             "WHERE i.id = :id")
-    Optional<BulkSettlementItem> findByIdWithEmployment(Long id);
+    Optional<BulkSettlementItem> findByIdWithWorker(Long id);
 
 
 }
