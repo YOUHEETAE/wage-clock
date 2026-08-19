@@ -4,13 +4,16 @@ import com.wageclock.wageclock.domain.outbox.BulkSettlementOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.BulkSettlementOutBoxEventRepository;
 import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEvent;
 import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEventRepository;
+import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import com.wageclock.wageclock.domain.payperiod.PayPeriodSettlementValidator;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.UnauthorizedException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,6 +36,9 @@ class BulkSettlementProcessorTest {
     @Mock BulkSettlementItemRepository bulkSettlementItemRepository;
     @Mock BulkSettlementOutBoxEventRepository bulkSettlementOutBoxEventRepository;
     @Mock InterBankFailureOutBoxEventRepository interBankFailureOutBoxEventRepository;
+    @Mock
+    PayPeriodSettlementValidator payPeriodSettlementValidator;
+    @Mock EmploymentRepository employmentRepository;
     @InjectMocks BulkSettlementProcessor bulkSettlementProcessor;
 
     @Test
@@ -53,8 +59,51 @@ class BulkSettlementProcessorTest {
 
         assertEquals(BigDecimal.valueOf(80000), result.getTotalAmount());
         assertEquals(2, result.getItems().size());
+        verify(payPeriod1).startSettling();
+        verify(payPeriod2).startSettling();
         verify(bulkSettlementRepository).save(any(BulkSettlement.class));
         verify(bulkSettlementOutBoxEventRepository).save(any(BulkSettlementOutBoxEvent.class));
+    }
+
+    // 출근(clockIn)과 직렬화하려면 PayPeriod 조회보다 먼저 Employment를 잠가야 한다
+    @Test
+    void createBulkSettlement_Employment_락을_먼저_잡는다() {
+        PayPeriod payPeriod = mock(PayPeriod.class);
+        when(payPeriod.getId()).thenReturn(1L);
+        when(payPeriod.getActualPayAmount()).thenReturn(BigDecimal.valueOf(50000));
+        when(payPeriod.getEmployerName()).thenReturn("테스트사업장");
+        when(payPeriodRepository.findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(anyList(), anyLong()))
+                .thenReturn(List.of(payPeriod));
+        when(bulkSettlementItemRepository.existsByPayPeriod_IdAndBulkSettlement_StatusNotIn(anyLong(), anyList()))
+                .thenReturn(false);
+
+        bulkSettlementProcessor.createBulkSettlement(List.of(1L), 1L);
+
+        InOrder inOrder = inOrder(employmentRepository, payPeriodRepository);
+        inOrder.verify(employmentRepository).findAllByIdInWithLock(List.of(1L));
+        inOrder.verify(payPeriodRepository)
+                .findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(anyList(), anyLong());
+    }
+
+    // 한 명이라도 걸리면 전체를 막는다 — 승인 금액과 실제 이체 구성이 어긋나면 안 된다
+    @Test
+    void createBulkSettlement_검증실패_전원_전이안됨() {
+        PayPeriod payPeriod1 = mock(PayPeriod.class);
+        PayPeriod payPeriod2 = mock(PayPeriod.class);
+        when(payPeriod1.getId()).thenReturn(1L);
+        when(payPeriodRepository.findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(anyList(), anyLong()))
+                .thenReturn(List.of(payPeriod1, payPeriod2));
+        when(bulkSettlementItemRepository.existsByPayPeriod_IdAndBulkSettlement_StatusNotIn(anyLong(), anyList()))
+                .thenReturn(false);
+        doThrow(new IllegalStateException("Working WorkSession exists"))
+                .when(payPeriodSettlementValidator).validate(payPeriod1);
+
+        assertThrows(IllegalStateException.class,
+                () -> bulkSettlementProcessor.createBulkSettlement(List.of(1L, 2L), 1L));
+
+        verify(payPeriod1, never()).startSettling();
+        verify(payPeriod2, never()).startSettling();
+        verify(bulkSettlementRepository, never()).save(any());
     }
 
     @Test
@@ -123,11 +172,13 @@ class BulkSettlementProcessorTest {
         assertEquals(BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY, item.getStatus());
     }
 
+    // 확정 실패는 돈이 안 나간 게 확실하므로 되돌려 재정산 대상이 되게 한다
     @Test
-    void failItem_정상_FAILED() {
+    void failItem_정상_FAILED_PayPeriod_reopen() {
+        PayPeriod payPeriod = mock(PayPeriod.class);
         BulkSettlementItem item = BulkSettlementItem.builder()
                 .bulkSettlement(mock(BulkSettlement.class))
-                .payPeriod(mock(PayPeriod.class))
+                .payPeriod(payPeriod)
                 .amount(BigDecimal.valueOf(50000))
                 .build();
         when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
@@ -135,6 +186,74 @@ class BulkSettlementProcessorTest {
         bulkSettlementProcessor.failItem(1L);
 
         assertEquals(BulkSettlementItem.BulkSettlementItemStatus.FAILED, item.getStatus());
+        verify(payPeriod).reopen();
+    }
+
+    // 미확정(PENDING_INQUIRY·UNKNOWN)은 되돌리지 않는다. 재정산되면 이중 송금이 된다.
+    @Test
+    void markPendingInquiry_PayPeriod_reopen_안함() {
+        PayPeriod payPeriod = mock(PayPeriod.class);
+        BulkSettlementItem item = BulkSettlementItem.builder()
+                .bulkSettlement(mock(BulkSettlement.class))
+                .payPeriod(payPeriod)
+                .amount(BigDecimal.valueOf(50000))
+                .build();
+        when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        bulkSettlementProcessor.markPendingInquiry(1L);
+
+        verify(payPeriod, never()).reopen();
+    }
+
+    @Test
+    void unknownItem_PayPeriod_reopen_안함() {
+        PayPeriod payPeriod = mock(PayPeriod.class);
+        BulkSettlementItem item = BulkSettlementItem.builder()
+                .bulkSettlement(mock(BulkSettlement.class))
+                .payPeriod(payPeriod)
+                .amount(BigDecimal.valueOf(50000))
+                .build();
+        when(bulkSettlementItemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        bulkSettlementProcessor.unknownItem(1L);
+
+        verify(payPeriod, never()).reopen();
+    }
+
+    // 사장이 입금하지 않아 무산된 정산 — 전원 되돌리지 않으면 SETTLING에 갇힌다
+    @Test
+    void failPayment_전원_reopen_후_PAYMENT_FAILED() {
+        PayPeriod payPeriod1 = mock(PayPeriod.class);
+        PayPeriod payPeriod2 = mock(PayPeriod.class);
+        BulkSettlement bulkSettlement = BulkSettlement.builder()
+                .employerId(1L).portOnePaymentId("BULK-test").totalAmount(BigDecimal.valueOf(80000)).build();
+        bulkSettlement.addItem(BulkSettlementItem.builder()
+                .bulkSettlement(bulkSettlement).payPeriod(payPeriod1).amount(BigDecimal.valueOf(50000)).build());
+        bulkSettlement.addItem(BulkSettlementItem.builder()
+                .bulkSettlement(bulkSettlement).payPeriod(payPeriod2).amount(BigDecimal.valueOf(30000)).build());
+        when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
+
+        bulkSettlementProcessor.failPayment("BULK-test");
+
+        verify(payPeriod1).reopen();
+        verify(payPeriod2).reopen();
+        assertEquals(BulkSettlement.BulkSettlementStatus.PAYMENT_FAILED, bulkSettlement.getStatus());
+    }
+
+    // PG가 웹훅을 재전송하면 두 번 들어온다. 두 번째 reopen은 ACTIVE라 예외가 난다.
+    @Test
+    void failPayment_이미_PAYMENT_FAILED면_reopen_안함() {
+        PayPeriod payPeriod = mock(PayPeriod.class);
+        BulkSettlement bulkSettlement = BulkSettlement.builder()
+                .employerId(1L).portOnePaymentId("BULK-test").totalAmount(BigDecimal.valueOf(50000)).build();
+        bulkSettlement.addItem(BulkSettlementItem.builder()
+                .bulkSettlement(bulkSettlement).payPeriod(payPeriod).amount(BigDecimal.valueOf(50000)).build());
+        bulkSettlement.paymentFailed();
+        when(bulkSettlementRepository.findByPortOnePaymentId("BULK-test")).thenReturn(Optional.of(bulkSettlement));
+
+        bulkSettlementProcessor.failPayment("BULK-test");
+
+        verify(payPeriod, never()).reopen();
     }
 
     @Test

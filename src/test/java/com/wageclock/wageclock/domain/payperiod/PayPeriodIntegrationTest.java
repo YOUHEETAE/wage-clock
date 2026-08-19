@@ -1,8 +1,6 @@
 package com.wageclock.wageclock.domain.payperiod;
 
 import com.wageclock.wageclock.domain.auth.UserRole;
-import com.wageclock.wageclock.domain.ewarequest.EwaRequestDto;
-import com.wageclock.wageclock.domain.ewarequest.EwaResponseDto;
 import com.wageclock.wageclock.domain.worksession.ClockInRequest;
 import com.wageclock.wageclock.domain.worksession.ClockInResponse;
 import com.wageclock.wageclock.domain.worksession.ClockOutRequest;
@@ -19,7 +17,6 @@ import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,57 +47,6 @@ public class PayPeriodIntegrationTest extends IntegrationTestBase {
         // 2초 대기 → 약 2,000원 적립 → 한도 약 600원
         Thread.sleep(2000);
         clockOut(sessionId, workerToken);
-    }
-
-    private Long requestEwa(BigDecimal amount) {
-        EwaRequestDto requestDto = new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString());
-        ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
-                "/api/ewa-requests/request",
-                new HttpEntity<>(requestDto, authHeaders(workerToken)),
-                EwaResponseDto.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        return response.getBody().ewaRequestId();
-    }
-
-    @Test
-    void WORKING_상태_workSession_존재_시_예외() {
-        testRestTemplate.postForEntity("/api/work-sessions/clock-in",
-                new HttpEntity<>(new ClockInRequest(employmentId), authHeaders(workerToken)), Void.class);
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/" + employmentId + "/close",
-                new HttpEntity<>(null, authHeaders(employerToken)), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-
-    @Test
-    void PAUSED_상태_workSession_존재_시_예외() {
-        testRestTemplate.postForEntity("/api/work-sessions/clock-in",
-                new HttpEntity<>(new ClockInRequest(employmentId), authHeaders(workerToken)), Void.class);
-        testRestTemplate.postForEntity("/api/work-sessions/pause",
-                new HttpEntity<>(new ClockOutRequest(sessionId), authHeaders(workerToken)), Void.class);
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/" + employmentId + "/close",
-                new HttpEntity<>(null, authHeaders(employerToken)), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-
-    @Test
-    void 다른_고용주_close_요청_시_예외() {
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/3/close",
-                new HttpEntity<>(null, authHeaders(employerToken)), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-    }
-
-    @Test
-    void 정상_close_검증() {
-        ResponseEntity<ClosePayPeriodResponse> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/" + employmentId + "/close",
-                new HttpEntity<>(null, authHeaders(employerToken)), ClosePayPeriodResponse.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        PayPeriod payPeriod = payPeriodRepository.findAll().get(0);
-        assertEquals(PayPeriod.PayPeriodStatus.CLOSED, payPeriod.getStatus());
-        assertEquals(0, response.getBody().actualPayAmount().compareTo(BigDecimal.valueOf(2000)));
     }
 
     @Test
@@ -200,45 +146,6 @@ public class PayPeriodIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void bulk_close_정상_마감() {
-        ResponseEntity<List> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/bulk-close",
-                new HttpEntity<>(List.of(employmentId), authHeaders(employerToken)),
-                List.class);
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(1, response.getBody().size());
-        PayPeriod payPeriod = payPeriodRepository.findAll().get(0);
-        assertEquals(PayPeriod.PayPeriodStatus.CLOSED, payPeriod.getStatus());
-    }
-
-    @Test
-    void bulk_close_WORKING_세션_존재_시_예외() {
-        clockIn(employmentId, workerToken);
-
-        ResponseEntity<Void> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/bulk-close",
-                new HttpEntity<>(List.of(employmentId), authHeaders(employerToken)),
-                Void.class);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-
-    @Test
-    void bulk_close_PAUSED_세션_존재_시_예외() {
-        Long newSessionId = clockIn(employmentId, workerToken);
-        testRestTemplate.postForEntity("/api/work-sessions/pause",
-                new HttpEntity<>(new ClockOutRequest(newSessionId), authHeaders(workerToken)), Void.class);
-
-        ResponseEntity<Void> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/bulk-close",
-                new HttpEntity<>(List.of(employmentId), authHeaders(employerToken)),
-                Void.class);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-
-    @Test
     void summary_activeSessionStatus_PAUSED_반환() {
         Long newSessionId = clockIn(employmentId, workerToken);
         testRestTemplate.postForEntity("/api/work-sessions/pause",
@@ -280,18 +187,5 @@ public class PayPeriodIntegrationTest extends IntegrationTestBase {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(WorkSession.WorkSessionStatus.PAUSED, response.getBody().get(0).activeSessionStatus());
-    }
-
-    @Test
-    void bulk_close_다른_고용주_요청_예외() {
-        signUp("다른사장", "other@test.com", UserRole.EMPLOYER);
-        String otherToken = login("other@test.com");
-
-        ResponseEntity<Void> response = testRestTemplate.postForEntity(
-                "/api/pay-periods/bulk-close",
-                new HttpEntity<>(List.of(employmentId), authHeaders(otherToken)),
-                Void.class);
-
-        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 }

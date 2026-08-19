@@ -29,16 +29,16 @@ public class DashboardIntegrationTest extends IntegrationTestBase {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        signUp("김사장", "employer@test.com", UserRole.EMPLOYER);
-        signUp("박사원", "worker@test.com", UserRole.WORKER);
+        signUp("김사장", "employer@dashboard-test.com", UserRole.EMPLOYER);
+        signUp("박사원", "worker@dashboard-test.com", UserRole.WORKER);
         signUp("유사원", "worker2@test.com", UserRole.WORKER);
-        employerToken = login("employer@test.com");
-        workerToken = login("worker@test.com");
+        employerToken = login("employer@dashboard-test.com");
+        workerToken = login("worker@dashboard-test.com");
         workerToken2 = login("worker2@test.com");
 
         workplaceId = createWorkplace("테스트 사업장", employerToken);
         // 시급 3,600,000 → 1초당 1,000원 적립
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
+        employmentId = createEmployment("worker@dashboard-test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
         Long employmentId2 = createEmployment("worker2@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
 
         Long sessionId = clockIn(employmentId, workerToken);
@@ -86,8 +86,8 @@ public class DashboardIntegrationTest extends IntegrationTestBase {
 
     @Test
     void 다른_고용주_대시보드_접근_시_예외() {
-        signUp("다른사장", "other@test.com", UserRole.EMPLOYER);
-        String otherToken = login("other@test.com");
+        signUp("다른사장", "other@dashboard-test.com", UserRole.EMPLOYER);
+        String otherToken = login("other@dashboard-test.com");
 
         ResponseEntity<Void> response = testRestTemplate.exchange(
                 "/api/dashboards/" + workplaceId,

@@ -1,8 +1,7 @@
 package com.wageclock.wageclock.infrastructure;
 
+import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.TransferType;
-import com.wageclock.wageclock.domain.worker.Worker;
-import com.wageclock.wageclock.global.exception.ExternalApiException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -26,7 +25,7 @@ public class FirmBankingService {
         this.redisTemplate = redisTemplate;
     }
 
-    public HectoFinancialTransferResponse transfer(Worker worker, BigDecimal amount, String messageNo) {
+    public HectoFinancialTransferResponse transfer(TransferAccount transferAccount, BigDecimal amount, String messageNo) {
         LocalDateTime now = LocalDateTime.now();
 
         HectoFinancialTransferRequest request = new HectoFinancialTransferRequest(
@@ -39,13 +38,14 @@ public class FirmBankingService {
                 properties.getAccountPwd(),
                 properties.getReconfirmCode(),
                 amount.longValue(),
-                worker.getBankCode(),
-                worker.getAccountNumber(),
-                worker.getName()
+                transferAccount.bankCode(),
+                transferAccount.accountNumber(),
+                transferAccount.holderName()
         );
 
         // TODO: 실제 연동 시 TCP 소켓으로 교체 (핵토파이낸셜 2000/100 전문)
-        // 타행이체 정상응답 후 3000/100(타행이체불능통지) 수신 처리 필요
+        // 정상응답 후 오는 3000/100(타행이체불능통지)은 MockFirmBankingSocketListener가
+        // HTTP로 대체 수신 중 — 실연동 시 소켓 수신 + 응답전문 회신으로 교체 필요
         return send(request);
     }
 

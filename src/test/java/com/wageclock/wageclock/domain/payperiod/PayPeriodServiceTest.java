@@ -1,6 +1,5 @@
 package com.wageclock.wageclock.domain.payperiod;
 
-import com.wageclock.wageclock.domain.employer.Employer;
 import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
@@ -37,82 +36,26 @@ public class PayPeriodServiceTest {
     @Mock
     PayPeriod payPeriod;
     @Mock
-    Employer employer;
-    @Mock
     WorkSession workSession;
     @Mock
     Worker worker;
 
-    @Test
-    void employmentId_권한_체크_예외(){
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        when(payPeriod.getEmployerId()).thenReturn(2L);
-        assertThrows(UnauthorizedException.class,()-> payPeriodService.closePayPeriod(1L,1L));
-    }
-    @Test
-    void ACTIVE_payPeriod_없을_시_예외(){
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.empty());
-        assertThrows(NotFoundException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
-    }
-    @Test
-    void workSession_WORKING_상태_존재_시_예외(){
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        when(payPeriod.getEmployerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.WORKING))
-                .thenReturn(true);
-        assertThrows(IllegalStateException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
-    }
-    @Test
-    void workSession_PAUSED_상태_존재_시_예외(){
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        when(payPeriod.getEmployerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.WORKING))
-                .thenReturn(false);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.PAUSED))
-                .thenReturn(true);
-        assertThrows(IllegalStateException.class, () -> payPeriodService.closePayPeriod(1L, 1L));
-    }
-    @Test
-    void 정상_close(){
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.WORKING))
-                .thenReturn(false);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L,
-                WorkSession.WorkSessionStatus.PAUSED))
-                .thenReturn(false);
-        when(employment.getEmployer()).thenReturn(employer);
-        when(employer.getId()).thenReturn(1L);
-        PayPeriod payPeriod = new PayPeriod(employment);
-        payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
-        payPeriod.addEwaAmount(BigDecimal.valueOf(1000));
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
-                .thenReturn(Optional.of(payPeriod));
-        payPeriodService.closePayPeriod(1L, 1L);
-        assertEquals(PayPeriod.PayPeriodStatus.CLOSED, payPeriod.getStatus());
-        assertEquals(LocalDate.now(), payPeriod.getPeriodEnd());
-        assertEquals(0, payPeriod.getActualPayAmount().compareTo(BigDecimal.valueOf(9000)));
-    }
+    // 정산 중에도 근로자가 자기 요약을 볼 수 있어야 한다
+    private static final List<PayPeriod.PayPeriodStatus> ACTIVE_OR_SETTLING =
+            List.of(PayPeriod.PayPeriodStatus.ACTIVE, PayPeriod.PayPeriodStatus.SETTLING);
 
     @Test
-    void summary_ACTIVE_payPeriod_없을_시_예외() {
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
+    void summary_진행중인_payPeriod_없을_시_예외() {
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(1L, ACTIVE_OR_SETTLING))
                 .thenReturn(Optional.empty());
         assertThrows(NotFoundException.class, () -> payPeriodService.getPayPeriodSummaryResponse(1L, 1L));
     }
 
     @Test
     void summary_workerId_권한_체크_예외() {
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(1L, ACTIVE_OR_SETTLING))
                 .thenReturn(Optional.of(payPeriod));
         when(payPeriod.getWorkerId()).thenReturn(2L);
-        when(payPeriod.getEmployerId()).thenReturn(2L);
         assertThrows(UnauthorizedException.class, () -> payPeriodService.getPayPeriodSummaryResponse(1L, 1L));
     }
 
@@ -120,14 +63,12 @@ public class PayPeriodServiceTest {
     void summary_현재_세션_없을_때_정상_조회() {
         when(employment.getWorkerId()).thenReturn(1L);
         when(employment.getId()).thenReturn(1L);
-        when(employment.getEmployer()).thenReturn(employer);
-        when(employer.getId()).thenReturn(2L);
         when(employment.getWorker()).thenReturn(worker);
         when(worker.getName()).thenReturn("박사원");
         PayPeriod realPayPeriod = new PayPeriod(employment);
         realPayPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
         realPayPeriod.addEwaAmount(BigDecimal.valueOf(1000));
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(1L, ACTIVE_OR_SETTLING))
                 .thenReturn(Optional.of(realPayPeriod));
         when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
                 .thenReturn(Optional.empty());
@@ -144,14 +85,12 @@ public class PayPeriodServiceTest {
     void summary_현재_세션_있을_때_currentEarned_반영() {
         when(employment.getWorkerId()).thenReturn(1L);
         when(employment.getId()).thenReturn(1L);
-        when(employment.getEmployer()).thenReturn(employer);
-        when(employer.getId()).thenReturn(2L);
         when(employment.getWorker()).thenReturn(worker);
         when(worker.getName()).thenReturn("박사원");
         PayPeriod realPayPeriod = new PayPeriod(employment);
         realPayPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
         realPayPeriod.addEwaAmount(BigDecimal.valueOf(1000));
-        when(payPeriodRepository.findByEmployment_IdAndStatus(1L, PayPeriod.PayPeriodStatus.ACTIVE))
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(1L, ACTIVE_OR_SETTLING))
                 .thenReturn(Optional.of(realPayPeriod));
         when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
                 .thenReturn(Optional.of(workSession));
@@ -165,12 +104,33 @@ public class PayPeriodServiceTest {
         assertEquals(WorkSession.WorkSessionStatus.WORKING, response.activeSessionStatus());
     }
 
+    // 정산 중이라고 조회가 막히면 근로자 화면이 비어버린다
+    @Test
+    void summary_SETTLING_상태도_조회되고_상태를_노출() {
+        when(employment.getWorkerId()).thenReturn(1L);
+        when(employment.getId()).thenReturn(1L);
+        when(employment.getWorker()).thenReturn(worker);
+        when(worker.getName()).thenReturn("박사원");
+        PayPeriod realPayPeriod = new PayPeriod(employment);
+        realPayPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
+        realPayPeriod.startSettling();
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(1L, ACTIVE_OR_SETTLING))
+                .thenReturn(Optional.of(realPayPeriod));
+        when(workSessionRepository.findByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED))
+                .thenReturn(Optional.empty());
+
+        PayPeriodSummaryResponse response = payPeriodService.getPayPeriodSummaryResponse(1L, 1L);
+
+        assertEquals(PayPeriod.PayPeriodStatus.SETTLING, response.payPeriodStatus());
+        assertEquals(0, response.totalEarnedAmount().compareTo(BigDecimal.valueOf(10000)));
+    }
+
     @Test
     void getPayPeriodSummaries_JDBC_레포지토리_위임() {
         PayPeriodSummaryResponse summaryResponse = new PayPeriodSummaryResponse(
                 1L, "박사원", LocalDate.now(),
                 BigDecimal.valueOf(10000), BigDecimal.valueOf(1000),
-                BigDecimal.valueOf(2000), null);
+                BigDecimal.valueOf(2000), null, PayPeriod.PayPeriodStatus.ACTIVE);
         when(payPeriodSummaryRepository.getSummaries(1L, 2L)).thenReturn(List.of(summaryResponse));
 
         List<PayPeriodSummaryResponse> result = payPeriodService.getPayPeriodSummaries(1L, 2L);

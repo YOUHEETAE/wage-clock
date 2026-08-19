@@ -31,14 +31,14 @@ public class HistoryIntegrationTest extends IntegrationTestBase {
 
     @BeforeEach
     void setUp() throws InterruptedException {
-        signUp("김사장", "employer@test.com", UserRole.EMPLOYER);
-        signUp("박사원", "worker@test.com", UserRole.WORKER);
-        signUp("유사원", "worker2@test.com", UserRole.WORKER);
-        employerToken = login("employer@test.com");
-        workerToken = login("worker@test.com");
-        workerToken2 = login("worker2@test.com");
+        signUp("김사장", "employer@history-test.com", UserRole.EMPLOYER);
+        signUp("박사원", "worker@history-test.com", UserRole.WORKER);
+        signUp("유사원", "worker2@history-test.com", UserRole.WORKER);
+        employerToken = login("employer@history-test.com");
+        workerToken = login("worker@history-test.com");
+        workerToken2 = login("worker2@history-test.com");
         Long workplaceId = createWorkplace("테스트 사업장", employerToken);
-        employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(10000), workplaceId, employerToken);
+        employmentId = createEmployment("worker@history-test.com", BigDecimal.valueOf(10000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
         Thread.sleep(1000);
         clockOut(sessionId, workerToken);

@@ -1,6 +1,7 @@
 package com.wageclock.wageclock.domain.ewarequest;
 
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
+import java.util.List;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
@@ -46,6 +47,11 @@ public class EwaRequestProcessor {
             throw new IllegalArgumentException("Invalid request amount");
         }
 
+        if (ewaRequestRepository.existsByPayPeriodAndStatusIn(payPeriod,
+                List.of(EwaRequest.EwaRequestStatus.PENDING, EwaRequest.EwaRequestStatus.PROCESSING))) {
+            throw new IllegalStateException("이미 처리 중인 선지급 요청이 있습니다");
+        }
+
         if (ewaRequestRepository.existsByIdempotencyKey(ewaRequestDto.idempotencyKey())) {
             throw new IllegalArgumentException("Duplicate idempotency key");
         }
@@ -61,23 +67,40 @@ public class EwaRequestProcessor {
         return new EwaResponseDto(ewaRequest.getId(),
                 ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
     }
+
     @Transactional
-    public EwaRequest validateAndLockEwa(Long ewaRequestId, Long employerId){
-        EwaRequest ewaRequest = ewaRequestRepository.findByIdWithLock(ewaRequestId)
+    public EwaResponseDto validateAndRejectEwa(Long ewaRequestId, Long employerId){
+        EwaRequest ewaRequest = lockEwa(ewaRequestId);
+        // 검증보다 먼저 잠근다. validateEwa의 getEmployerId()가 PayPeriod 프록시를 초기화하는데,
+        // 그 뒤에 락을 잡으면 영속성 컨텍스트가 이미 들고 있는 값을 돌려주므로
+        // 락 획득 전의 금액에서 차감하게 된다.
+        PayPeriod payPeriod = payPeriodRepository.findByIdWithLock(ewaRequest.getPayPeriodId())
+                .orElseThrow(() -> new NotFoundException("PayPeriod Not Found"));
+        validateEwa(ewaRequest, employerId);
+        ewaRequest.rejected();
+        payPeriod.subtractEwaAmount(ewaRequest.getRequestedAmount());
+        return new EwaResponseDto(ewaRequest.getId(), ewaRequest.getRequestedAmount(), ewaRequest.getStatus());
+    }
+
+    @Transactional
+    public EwaRequest validateAndMarkProcessing(Long ewaRequestId, Long employerId){
+        EwaRequest ewaRequest = lockEwa(ewaRequestId);
+        validateEwa(ewaRequest, employerId);
+        ewaRequest.processing();
+        return ewaRequest;
+    }
+
+    private EwaRequest lockEwa(Long ewaRequestId){
+        return ewaRequestRepository.findByIdWithLock(ewaRequestId)
                 .orElseThrow(() -> new NotFoundException("Invalid request Id"));
+    }
+
+    private void validateEwa(EwaRequest ewaRequest, Long employerId){
         if(ewaRequest.getStatus() != EwaRequest.EwaRequestStatus.PENDING){
             throw new IllegalStateException("EWA request is not in PENDING status");
         }
         if(!ewaRequest.getEmployerId().equals(employerId)){
             throw new UnauthorizedException("Invalid employer Id");
         }
-        return ewaRequest;
-    }
-    @Transactional
-    public void processRejectEwa(EwaRequest ewaRequest){
-        ewaRequest.rejected();
-        ewaRequestRepository.save(ewaRequest);
-        ewaRequest.getPayPeriod().subtractEwaAmount(ewaRequest.getRequestedAmount());
-        payPeriodRepository.save(ewaRequest.getPayPeriod());
     }
 }

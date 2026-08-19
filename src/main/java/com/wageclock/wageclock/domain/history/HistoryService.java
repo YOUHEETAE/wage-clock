@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.history;
 
+import com.wageclock.wageclock.domain.auth.UserRole;
 import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.employment.EmploymentRepository;
 import com.wageclock.wageclock.global.exception.NotFoundException;
@@ -23,13 +24,15 @@ public class HistoryService {
     }
 
     @Transactional(readOnly = true)
-    public HistoryResponse getHistories(Long employmentId, Long callerId, String after, int size){
+    public HistoryResponse getHistories(Long employmentId, Long callerId, UserRole role, String after, int size){
         Employment employment = employmentRepository.findById(employmentId).orElseThrow(
                 () -> new NotFoundException("Employment not found")
         );
-        if(!employment.getEmployerId().equals(callerId) && !employment.getWorkerId().equals(callerId)){
-            throw new UnauthorizedException("Unauthorized");
-        }
+        boolean authorized = switch (role) {
+            case EMPLOYER -> employment.getEmployerId().equals(callerId);
+            case WORKER -> employment.getWorkerId().equals(callerId);
+        };
+        if (!authorized) throw new UnauthorizedException("Unauthorized");
         Timestamp cursor = after != null ? Timestamp.valueOf(LocalDateTime.parse(after)) : null;
         List<HistoryEvent> historyEvents = historyRepository.getHistory(employmentId, cursor, size + 1);
         boolean hasNext = historyEvents.size() > size;

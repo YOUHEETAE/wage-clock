@@ -17,7 +17,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class EwaRequestProcessorTest {
@@ -77,14 +77,14 @@ public class EwaRequestProcessorTest {
     @Test
     void EWA요청_없음_예외() {
         when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.empty());
-        assertThrows(RuntimeException.class, () -> ewaRequestProcessor.validateAndLockEwa(1L, 1L));
+        assertThrows(RuntimeException.class, () -> ewaRequestProcessor.validateAndMarkProcessing(1L, 1L));
     }
 
     @Test
     void PENDING_아님_예외() {
         when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.of(ewaRequest));
         when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.APPROVED);
-        assertThrows(IllegalStateException.class, () -> ewaRequestProcessor.validateAndLockEwa(1L, 1L));
+        assertThrows(IllegalStateException.class, () -> ewaRequestProcessor.validateAndMarkProcessing(1L, 1L));
     }
 
     @Test
@@ -92,7 +92,36 @@ public class EwaRequestProcessorTest {
         when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.of(ewaRequest));
         when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
         when(ewaRequest.getEmployerId()).thenReturn(2L);
-        assertThrows(RuntimeException.class, () -> ewaRequestProcessor.validateAndLockEwa(1L, 1L));
+        assertThrows(RuntimeException.class, () -> ewaRequestProcessor.validateAndMarkProcessing(1L, 1L));
+    }
+
+    @Test
+    void validateAndMarkProcessing_PROCESSING_상태로_변경() {
+        when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.of(ewaRequest));
+        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING);
+        when(ewaRequest.getEmployerId()).thenReturn(1L);
+
+        ewaRequestProcessor.validateAndMarkProcessing(1L, 1L);
+
+        verify(ewaRequest).processing();
+    }
+
+    @Test
+    void validateAndRejectEwa_REJECTED_EWA한도_복구() {
+        PayPeriod payPeriod = mock(PayPeriod.class);
+        when(ewaRequestRepository.findByIdWithLock(1L)).thenReturn(Optional.of(ewaRequest));
+        when(ewaRequest.getStatus()).thenReturn(EwaRequest.EwaRequestStatus.PENDING, EwaRequest.EwaRequestStatus.REJECTED);
+        when(ewaRequest.getEmployerId()).thenReturn(1L);
+        when(ewaRequest.getPayPeriodId()).thenReturn(10L);
+        when(payPeriodRepository.findByIdWithLock(10L)).thenReturn(Optional.of(payPeriod));
+        when(ewaRequest.getRequestedAmount()).thenReturn(BigDecimal.valueOf(100));
+        when(ewaRequest.getId()).thenReturn(1L);
+
+        EwaResponseDto response = ewaRequestProcessor.validateAndRejectEwa(1L, 1L);
+
+        verify(ewaRequest).rejected();
+        verify(payPeriod).subtractEwaAmount(BigDecimal.valueOf(100));
+        assertEquals(EwaRequest.EwaRequestStatus.REJECTED, response.status());
     }
 
 }

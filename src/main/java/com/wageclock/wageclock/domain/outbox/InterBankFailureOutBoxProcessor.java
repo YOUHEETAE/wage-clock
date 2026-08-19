@@ -1,7 +1,6 @@
 package com.wageclock.wageclock.domain.outbox;
 
 import com.wageclock.wageclock.domain.port.WageTransferResult;
-import com.wageclock.wageclock.domain.settlement.BulkSettlementItem;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementProcessor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,43 +19,43 @@ public class InterBankFailureOutBoxProcessor {
     }
 
     @Transactional
-    public void handleRetryOrFail(InterBankFailureOutBoxEvent event, BulkSettlementItem bulkSettlementItem) {
+    public void handleRetryOrFail(InterBankFailureOutBoxEvent event, Long bulkSettlementItemId) {
         event.incrementRetryCount();
         if (event.getStatus() == InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.FAILED) {
-            bulkSettlementProcessor.failItem(bulkSettlementItem.getId());
+            bulkSettlementProcessor.failItem(bulkSettlementItemId);
             //todo : 확정 실패시 알림 발송 필요
         } else {
-            bulkSettlementProcessor.unknownItem(bulkSettlementItem.getId());
+            bulkSettlementProcessor.unknownItem(bulkSettlementItemId);
         }
         interBankFailureOutBoxEventRepository.save(event);
     }
 
     @Transactional
-    public void handlePrepareRetryOrFail(InterBankFailureOutBoxEvent event, BulkSettlementItem bulkSettlementItem) {
+    public void handlePrepareRetryOrFail(InterBankFailureOutBoxEvent event, Long bulkSettlementItemId) {
         event.incrementRetryCount();
         if (event.getStatus() == InterBankFailureOutBoxEvent.InterBankFailureOutBoxEventStatus.FAILED) {
-            bulkSettlementProcessor.failItem(bulkSettlementItem.getId());
+            bulkSettlementProcessor.failItem(bulkSettlementItemId);
             //todo : 확정 실패시 알림 발송 필요
         }
         interBankFailureOutBoxEventRepository.save(event);
     }
 
     @Transactional
-    public void applyResult(WageTransferResult result, InterBankFailureOutBoxEvent event,
-                            BulkSettlementItem bulkSettlementItem) {
+    public void applyResult(WageTransferResult result, InterBankFailureOutBoxEvent event, Long bulkSettlementItemId) {
         switch (result.classify()){
             case SUCCESS -> {
-                bulkSettlementProcessor.completeRetry(bulkSettlementItem.getId());
+                bulkSettlementProcessor.completeRetry(bulkSettlementItemId);
                 event.processed();
                 interBankFailureOutBoxEventRepository.save(event);
             }
-            case PENDING_INQUIRY -> bulkSettlementProcessor.markPendingInquiry(bulkSettlementItem.getId());
+            case PENDING_INQUIRY -> bulkSettlementProcessor.markPendingInquiry(bulkSettlementItemId);
             case FAILURE -> {
-                bulkSettlementProcessor.failItem(bulkSettlementItem.getId());
+                //todo : 확정 실패시 알림 발송 필요
+                bulkSettlementProcessor.failItem(bulkSettlementItemId);
                 event.failed();
                 interBankFailureOutBoxEventRepository.save(event);
             }
-            case UNKNOWN -> handleRetryOrFail(event, bulkSettlementItem);
+            case UNKNOWN -> handleRetryOrFail(event, bulkSettlementItemId);
         }
     }
 }

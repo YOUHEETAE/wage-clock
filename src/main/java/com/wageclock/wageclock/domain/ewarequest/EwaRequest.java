@@ -46,6 +46,7 @@ public class EwaRequest extends BaseEntity {
 
     public enum EwaRequestStatus{
         PENDING,
+        PROCESSING,
         APPROVED,
         REJECTED,
         FAILED,
@@ -61,6 +62,9 @@ public class EwaRequest extends BaseEntity {
     public void failed(){
         this.status = EwaRequestStatus.FAILED;
     }
+    public void processing(){
+        this.status = EwaRequestStatus.PROCESSING;
+    }
 
     public Long getEmployerId(){
         return payPeriod.getEmployment().getEmployer().getId();
@@ -75,8 +79,8 @@ public class EwaRequest extends BaseEntity {
     public void unknown(){
         this.status = EwaRequestStatus.UNKNOWN;
     }
-    public void refundEwa(BigDecimal amount){
-        this.payPeriod.subtractEwaAmount(amount);
+    public Long getPayPeriodId(){
+        return payPeriod.getId();
     }
 
 }

@@ -26,34 +26,12 @@ public class PayPeriodService {
         this.payPeriodSummaryRepository = payPeriodSummaryRepository;
     }
 
-    @Transactional
-    public ClosePayPeriodResponse closePayPeriod(Long employmentId, Long employerId){
-        PayPeriod payPeriod = payPeriodRepository
-                .findByEmployment_IdAndStatus(employmentId, PayPeriod.PayPeriodStatus.ACTIVE)
-                .orElseThrow(() -> new NotFoundException("PayPeriod not found"));
-        if(!payPeriod.getEmployerId().equals(employerId)){
-            throw new UnauthorizedException("unauthorized");
-        }
-        if(workSessionRepository.existsByEmploymentIdAndStatus(employmentId,
-                WorkSession.WorkSessionStatus.WORKING)){
-            throw new IllegalStateException("Working workSession exists");
-        }
-        if(workSessionRepository.existsByEmploymentIdAndStatus(employmentId,
-                WorkSession.WorkSessionStatus.PAUSED)){
-            throw new IllegalStateException("Paused workSession exists");
-        }
-        payPeriod.close();
-        return new ClosePayPeriodResponse(payPeriod.getPeriodStart(), payPeriod.getPeriodEnd(),
-                payPeriod.getTotalEarnedAmount(), payPeriod.getTotalEwaAmount(),
-                payPeriod.getActualPayAmount());
-    }
     @Transactional(readOnly = true)
-    public PayPeriodSummaryResponse getPayPeriodSummaryResponse(Long employmentId ,Long callerId){
-        PayPeriod payPeriod = payPeriodRepository.findByEmployment_IdAndStatus(employmentId, PayPeriod.PayPeriodStatus.ACTIVE)
-                .orElseThrow(() -> new NotFoundException("Worker not found"));
-        if(!payPeriod.getEmployerId().equals(callerId) && !payPeriod.getWorkerId().equals(callerId)){
-            throw new UnauthorizedException("unauthorized");
-        }
+    public PayPeriodSummaryResponse getPayPeriodSummaryResponse(Long employmentId, Long workerId){
+        PayPeriod payPeriod = payPeriodRepository.findByEmployment_IdAndStatusIn(employmentId,
+                        List.of(PayPeriod.PayPeriodStatus.ACTIVE, PayPeriod.PayPeriodStatus.SETTLING))
+                .orElseThrow(() -> new NotFoundException("PayPeriod not found"));
+        if (!payPeriod.getWorkerId().equals(workerId)) throw new UnauthorizedException("unauthorized");
         java.util.Optional<WorkSession> activeSession = workSessionRepository
                 .findByEmploymentIdAndStatusNot(employmentId, WorkSession.WorkSessionStatus.COMPLETED);
         BigDecimal currentEarned = activeSession.map(WorkSession::getCurrentEarnedAmount).orElse(BigDecimal.ZERO);
@@ -65,27 +43,6 @@ public class PayPeriodService {
         return payPeriodSummaryRepository.getSummaries(workplaceId, employerId);
     }
 
-    @Transactional
-    public List<ClosePayPeriodResponse> bulkClosePayPeriods(List<Long> employmentIds, Long employerId) {
-        List<PayPeriod> payPeriods = payPeriodRepository
-                .findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(employmentIds, employerId);
-        if (payPeriods.size() != employmentIds.size()) {
-            throw new UnauthorizedException("unauthorized");
-        }
-        return payPeriods.stream()
-                .map(pp -> {
-                    Long employmentId = pp.getEmploymentId();
-                    if (workSessionRepository.existsByEmploymentIdAndStatus(employmentId, WorkSession.WorkSessionStatus.WORKING)
-                            || workSessionRepository.existsByEmploymentIdAndStatus(employmentId, WorkSession.WorkSessionStatus.PAUSED)) {
-                        throw new IllegalStateException("Active workSession exists for employment: " + employmentId);
-                    }
-                    pp.close();
-                    return new ClosePayPeriodResponse(pp.getPeriodStart(), pp.getPeriodEnd(),
-                            pp.getTotalEarnedAmount(), pp.getTotalEwaAmount(), pp.getActualPayAmount());
-                })
-                .toList();
-    }
-
     private PayPeriodSummaryResponse toSummaryResponse(PayPeriod payPeriod, BigDecimal currentEarned,
                                                         WorkSession.WorkSessionStatus activeSessionStatus) {
         return new PayPeriodSummaryResponse(
@@ -95,6 +52,7 @@ public class PayPeriodService {
                 payPeriod.getTotalEarnedAmount().add(currentEarned),
                 payPeriod.getTotalEwaAmount(),
                 payPeriod.getRemainingEwaLimitWith(currentEarned),
-                activeSessionStatus);
+                activeSessionStatus,
+                payPeriod.getStatus());
     }
 }

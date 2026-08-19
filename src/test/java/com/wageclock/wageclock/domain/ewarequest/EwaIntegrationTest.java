@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +30,7 @@ public class EwaIntegrationTest extends IntegrationTestBase {
     private String workerToken;
     private String employerToken;
     private Long employmentId;
+    private Long workplaceId;
 
     @AfterEach
     void tearDown() {
@@ -42,7 +44,7 @@ public class EwaIntegrationTest extends IntegrationTestBase {
         signUp("박사원", "worker@test.com", UserRole.WORKER);
         employerToken = login("employer@test.com");
         workerToken = login("worker@test.com");
-        Long workplaceId = createWorkplace("테스트 사업장", employerToken);
+        workplaceId = createWorkplace("테스트 사업장", employerToken);
         // 시급 3,600,000 → 1초당 1,000원 적립
         employmentId = createEmployment("worker@test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
         Long sessionId = clockIn(employmentId, workerToken);
@@ -52,10 +54,14 @@ public class EwaIntegrationTest extends IntegrationTestBase {
     }
 
     private Long requestEwa(BigDecimal amount) {
-        EwaRequestDto requestDto = new EwaRequestDto(employmentId, amount, UUID.randomUUID().toString());
+        return requestEwa(employmentId, workerToken, amount);
+    }
+
+    private Long requestEwa(Long targetEmploymentId, String token, BigDecimal amount) {
+        EwaRequestDto requestDto = new EwaRequestDto(targetEmploymentId, amount, UUID.randomUUID().toString());
         ResponseEntity<EwaResponseDto> response = testRestTemplate.postForEntity(
                 "/api/ewa-requests/request",
-                new HttpEntity<>(requestDto, authHeaders(workerToken)),
+                new HttpEntity<>(requestDto, authHeaders(token)),
                 EwaResponseDto.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         return response.getBody().ewaRequestId();
@@ -208,5 +214,107 @@ public class EwaIntegrationTest extends IntegrationTestBase {
                 Void.class);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    void 펜딩_EWA_목록_조회() throws InterruptedException {
+        // 한 PayPeriod에 PENDING 요청은 하나만 존재할 수 있으므로 같은 사업장에 직원을 하나 더 둔다
+        signUp("이사원", "worker2@ewa-test.com", UserRole.WORKER);
+        String worker2Token = login("worker2@ewa-test.com");
+        Long employment2Id = createEmployment("worker2@ewa-test.com", BigDecimal.valueOf(3_600_000), workplaceId, employerToken);
+        Long session2Id = clockIn(employment2Id, worker2Token);
+        Thread.sleep(2000);
+        clockOut(session2Id, worker2Token);
+
+        requestEwa(BigDecimal.valueOf(100));
+        requestEwa(employment2Id, worker2Token, BigDecimal.valueOf(100));
+
+        ResponseEntity<PendingEwaResponse[]> response = testRestTemplate.exchange(
+                "/api/ewa-requests/pending?workplaceId=" + workplaceId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(authHeaders(employerToken)),
+                PendingEwaResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(2, response.getBody().length);
+        // 쿼리에 ORDER BY가 없어 순서를 보장하지 않으므로 포함 여부로 검증한다
+        List<String> workerNames = Arrays.stream(response.getBody())
+                .map(PendingEwaResponse::workerName).toList();
+        List<Long> employmentIds = Arrays.stream(response.getBody())
+                .map(PendingEwaResponse::employmentId).toList();
+        assertTrue(workerNames.containsAll(List.of("박사원", "이사원")));
+        assertTrue(employmentIds.containsAll(List.of(employmentId, employment2Id)));
+    }
+
+    @Test
+    void 다른_고용주_펜딩_목록_빈결과() {
+        requestEwa(BigDecimal.valueOf(100));
+        signUp("다른사장", "other@test.com", UserRole.EMPLOYER);
+        String otherToken = login("other@test.com");
+
+        ResponseEntity<PendingEwaResponse[]> response = testRestTemplate.exchange(
+                "/api/ewa-requests/pending?workplaceId=" + workplaceId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(authHeaders(otherToken)),
+                PendingEwaResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(0, response.getBody().length);
+    }
+
+    @Test
+    void PENDING_아닌_요청은_목록_미포함() {
+        when(wageTransferPort.transfer(any(), any(), any())).thenReturn(new WageTransferResult("TX-001", null, null));
+        Long ewaId = requestEwa(BigDecimal.valueOf(100));
+        testRestTemplate.postForEntity("/api/ewa-requests/" + ewaId + "/initiate",
+                new HttpEntity<>(null, authHeaders(employerToken)), InitiateEwaResponse.class);
+
+        ResponseEntity<PendingEwaResponse[]> response = testRestTemplate.exchange(
+                "/api/ewa-requests/pending?workplaceId=" + workplaceId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(authHeaders(employerToken)),
+                PendingEwaResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(0, response.getBody().length);
+    }
+
+    @Test
+    void 내_요청_현황_조회() {
+        // PENDING 상태에서는 추가 요청이 막히므로 첫 건을 거절해 상태를 비운 뒤 재요청한다
+        Long firstEwaId = requestEwa(BigDecimal.valueOf(100));
+        testRestTemplate.postForEntity("/api/ewa-requests/" + firstEwaId + "/reject",
+                new HttpEntity<>(null, authHeaders(employerToken)), Void.class);
+        requestEwa(BigDecimal.valueOf(200));
+
+        ResponseEntity<EwaRequestDetailResponse[]> response = testRestTemplate.exchange(
+                "/api/ewa-requests/my-requests?employmentId=" + employmentId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(authHeaders(workerToken)),
+                EwaRequestDetailResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(2, response.getBody().length);
+        // 쿼리에 ORDER BY가 없어 순서를 보장하지 않으므로 포함 여부로 검증한다
+        List<EwaRequest.EwaRequestStatus> statuses = Arrays.stream(response.getBody())
+                .map(EwaRequestDetailResponse::status).toList();
+        assertTrue(statuses.contains(EwaRequest.EwaRequestStatus.PENDING));
+        assertTrue(statuses.contains(EwaRequest.EwaRequestStatus.REJECTED));
+    }
+
+    @Test
+    void 다른_워커_조회_불가() {
+        requestEwa(BigDecimal.valueOf(100));
+        signUp("다른직원", "other-worker@ewa-test.com", UserRole.WORKER);
+        String otherWorkerToken = login("other-worker@ewa-test.com");
+
+        ResponseEntity<EwaRequestDetailResponse[]> response = testRestTemplate.exchange(
+                "/api/ewa-requests/my-requests?employmentId=" + employmentId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(authHeaders(otherWorkerToken)),
+                EwaRequestDetailResponse[].class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(0, response.getBody().length);
     }
 }

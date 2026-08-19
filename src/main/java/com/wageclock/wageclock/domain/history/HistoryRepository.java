@@ -20,6 +20,20 @@ public class HistoryRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * 근태·정산·선지급 사건을 하나의 타임라인으로 합쳐 시간순으로 돌려준다.
+     * <p>
+     * 서로 다른 테이블을 UNION ALL로 묶으려면 컬럼 목록과 타입이 같아야 하므로,
+     * 각 사건에 해당 없는 컬럼은 타입을 명시한 NULL로 채운다. 기간 종료(PAY_PERIOD_END)와
+     * 퇴근(WORK_SESSION_END)은 아직 일어나지 않았을 수 있어 각각 CLOSED·clock_out 조건으로 거른다.
+     * <p>
+     * 페이징은 offset이 아니라 event_time 커서를 쓴다. offset은 뒤로 갈수록 앞의 행을 세느라
+     * 느려지고, 조회하는 사이에 새 사건이 쌓이면 경계가 밀려 중복이나 누락이 생긴다.
+     * <p>
+     * 엔티티가 아니라 JdbcTemplate으로 읽는 이유는 두 가지다. 다섯 테이블을 합친 결과라
+     * 대응하는 엔티티가 없고, 화면에 한 번 그리고 버릴 목록을 영속성 컨텍스트에 올리면
+     * 스냅샷 생성과 더티 체킹 비용만 남는다.
+     */
     public List<HistoryEvent> getHistory(Long employmentId, Timestamp cursor, int size) {
         String sql = """
                 SELECT * FROM (

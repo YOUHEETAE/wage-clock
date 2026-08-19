@@ -1,12 +1,10 @@
 package com.wageclock.wageclock.domain.outbox;
 
-import com.wageclock.wageclock.domain.ewatransfer.EwaTransfer;
 import com.wageclock.wageclock.domain.ewatransfer.EwaTransferProcessor;
-import com.wageclock.wageclock.domain.ewatransfer.EwaTransferRepository;
+import com.wageclock.wageclock.domain.ewatransfer.EwaTransferRetryContext;
 import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
-import com.wageclock.wageclock.global.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -14,18 +12,15 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class EwaTransferFailureOutBoxService {
 
-    private final EwaTransferRepository ewaTransferRepository;
     private final WageTransferPort wageTransferPort;
     private final EwaTransferProcessor ewaTransferProcessor;
     private final EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository;
     private final EwaTransferFailureOutBoxProcessor ewaTransferFailureOutBoxProcessor;
 
-    public EwaTransferFailureOutBoxService(EwaTransferRepository ewaTransferRepository,
-                                           WageTransferPort wageTransferPort,
+    public EwaTransferFailureOutBoxService(WageTransferPort wageTransferPort,
                                            EwaTransferProcessor ewaTransferProcessor,
                                            EwaTransferFailureOutBoxRepository ewaTransferFailureOutBoxRepository,
                                            EwaTransferFailureOutBoxProcessor ewaTransferFailureOutBoxProcessor) {
-        this.ewaTransferRepository = ewaTransferRepository;
         this.wageTransferPort = wageTransferPort;
         this.ewaTransferProcessor = ewaTransferProcessor;
         this.ewaTransferFailureOutBoxRepository = ewaTransferFailureOutBoxRepository;
@@ -33,19 +28,16 @@ public class EwaTransferFailureOutBoxService {
     }
 
     public void processEvent(EwaTransferFailureOutBoxEvent event) {
-        EwaTransfer ewaTransfer = ewaTransferRepository.findByIdWithWorker(event.getEwaTransferId())
-                .orElseThrow(() -> new NotFoundException("EwaTransfer Not Found"));
-        if (ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.COMPLETED
-                || ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.FAILED) {
+        EwaTransferRetryContext context = ewaTransferProcessor.loadRetryContext(event.getEwaTransferId());
+        if (context.isSettled()) {
             event.processed();
             ewaTransferFailureOutBoxRepository.save(event);
             return;
         }
-        if(ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.PENDING_INQUIRY
-                || ewaTransfer.getStatus() == EwaTransfer.EwaTransferStatus.UNKNOWN){
-            inquireTransfer(ewaTransfer, event);
-        }else{
-            retryTransfer(ewaTransfer, event);
+        if (context.needsInquiry()) {
+            inquireTransfer(context, event);
+        } else {
+            retryTransfer(context, event);
         }
     }
 
@@ -54,31 +46,41 @@ public class EwaTransferFailureOutBoxService {
         ewaTransferProcessor.assignMessageNo(ewaTransferId, messageNo);
         return messageNo;
     }
-    private void retryTransfer(EwaTransfer ewaTransfer, EwaTransferFailureOutBoxEvent event){
+    private void retryTransfer(EwaTransferRetryContext context, EwaTransferFailureOutBoxEvent event){
+        Long ewaTransferId = context.ewaTransferId();
+        // 계좌가 없으면 전문번호를 발급하지 않고 재시도 카운트만 태운다.
+        // 근로자가 그 사이 계좌를 등록하면 다음 재시도에서 성공하므로 즉시 확정 실패시키지 않는다.
+        if (!context.transferAccount().isRegistered()) {
+            log.error("계좌 정보 미등록 ewaTransferId={}", ewaTransferId);
+            ewaTransferFailureOutBoxProcessor.handlePrepareRetryOrFail(event, ewaTransferId);
+            return;
+        }
         String messageNo;
         try {
-            messageNo = issueMessageNo(ewaTransfer.getId());
+            messageNo = issueMessageNo(ewaTransferId);
         }catch (Exception e){
-            log.error("messageNo 발급/저장 실패 ewaTransferId={}", ewaTransfer.getId(), e);
-            ewaTransferFailureOutBoxProcessor.handlePrepareRetryOrFail(event, ewaTransfer.getId());
+            log.error("messageNo 발급/저장 실패 ewaTransferId={}", ewaTransferId, e);
+            ewaTransferFailureOutBoxProcessor.handlePrepareRetryOrFail(event, ewaTransferId);
             return;
         }
         try {
-            WageTransferResult result = wageTransferPort.transfer(ewaTransfer.getWorker(), ewaTransfer.getAmount(), messageNo);
-            ewaTransferFailureOutBoxProcessor.applyResult(result, ewaTransfer, event);
+            WageTransferResult result = wageTransferPort.transfer(context.transferAccount(),
+                    context.amount(), messageNo);
+            ewaTransferFailureOutBoxProcessor.applyResult(result, ewaTransferId, event);
         }
         catch (Exception e){
-            log.error("이체 처리 실패 EwaTransferId={}", ewaTransfer.getId(), e);
-            ewaTransferFailureOutBoxProcessor.handleRetryOrFail(event, ewaTransfer.getId());
+            log.error("이체 처리 실패 EwaTransferId={}", ewaTransferId, e);
+            ewaTransferFailureOutBoxProcessor.handleRetryOrFail(event, ewaTransferId);
         }
     }
-    private void inquireTransfer(EwaTransfer ewaTransfer, EwaTransferFailureOutBoxEvent event){
+    private void inquireTransfer(EwaTransferRetryContext context, EwaTransferFailureOutBoxEvent event){
+        Long ewaTransferId = context.ewaTransferId();
         try {
-            WageTransferResult result = wageTransferPort.inquireTransfer(ewaTransfer.getMessageNo());
-            ewaTransferFailureOutBoxProcessor.applyResult(result, ewaTransfer, event);
+            WageTransferResult result = wageTransferPort.inquireTransfer(context.messageNo());
+            ewaTransferFailureOutBoxProcessor.applyResult(result, ewaTransferId, event);
         }catch (Exception e){
-            log.error("이체 결과 조회 실패 EwaTransferId={}", ewaTransfer.getId(), e);
-            ewaTransferFailureOutBoxProcessor.handleRetryOrFail(event, ewaTransfer.getId());
+            log.error("이체 결과 조회 실패 EwaTransferId={}", ewaTransferId, e);
+            ewaTransferFailureOutBoxProcessor.handleRetryOrFail(event, ewaTransferId);
         }
     }
 }

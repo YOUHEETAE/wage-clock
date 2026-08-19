@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -29,18 +30,27 @@ public class WorkSessionService {
 
     @Transactional
     public ClockInResponse clockIn(ClockInRequest clockInRequest, Long workerId){
-        Employment employment = employmentRepository.findById(clockInRequest.employmentId())
+        // 정산 마감(closePayPeriod)과 직렬화하기 위한 락.
+        // 아래 중복 검사와 세션 생성이 한 트랜잭션 안에서 원자적으로 처리된다.
+        Employment employment = employmentRepository.findByIdWithLock(clockInRequest.employmentId())
                 .orElseThrow(() -> new NotFoundException("employment not found"));
         if (!employment.getWorkerId().equals(workerId)) {
             throw new UnauthorizedException("unauthorized");
         }
-        if(workSessionRepository.existsByEmploymentIdAndStatus(clockInRequest.employmentId(),
-                WorkSession.WorkSessionStatus.WORKING)){
+        if(workSessionRepository.existsByEmploymentIdAndStatusNot(clockInRequest.employmentId(),
+                WorkSession.WorkSessionStatus.COMPLETED)){
             throw new DuplicateException("this WorkSession already exists");
         }
         PayPeriod payPeriod = payPeriodRepository
-                .findByEmployment_IdAndStatus(employment.getId(), PayPeriod.PayPeriodStatus.ACTIVE)
+                .findByEmployment_IdAndStatusIn(employment.getId(),
+                        List.of(PayPeriod.PayPeriodStatus.ACTIVE, PayPeriod.PayPeriodStatus.SETTLING))
                 .orElseGet(() -> payPeriodRepository.save(new PayPeriod(employment)));
+        // 정산 중에는 새 PayPeriod를 만들지 않고 출근을 막는다.
+        // employment당 진행 중인 PayPeriod가 둘이 되면 Optional 조회들이 깨지고,
+        // 정산이 무산돼 SETTLING을 ACTIVE로 되돌릴 때 ACTIVE가 두 개가 된다.
+        if (payPeriod.getStatus() == PayPeriod.PayPeriodStatus.SETTLING) {
+            throw new IllegalStateException("정산이 진행 중이라 출근할 수 없습니다");
+        }
         WorkSession workSession = workSessionRepository.save(
                 WorkSession.builder()
                         .clockIn(LocalDateTime.now())
@@ -58,7 +68,9 @@ public class WorkSessionService {
             throw new UnauthorizedException("unauthorized");
         }
         workSession.clockOut();
-        workSession.getPayPeriod().addEarnedAmount(workSession.getEarnedAmount());
+        PayPeriod payPeriod = payPeriodRepository.findByIdWithLock(workSession.getPayPeriodId())
+                        .orElseThrow(() -> new NotFoundException("PayPeriod not found"));
+        payPeriod.addEarnedAmount(workSession.getEarnedAmount());
         return new ClockOutResponse(workSession.getClockOut(), workSession.getEarnedAmount());
     }
     @Transactional

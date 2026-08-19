@@ -38,7 +38,7 @@
 | 근태 기록 | 출근·퇴근·일시정지·재개, 분 단위 급여 실시간 적립 |
 | 선지급 (EWA) | 적립액의 30% 한도 내에서 즉시 펌뱅킹 이체 |
 | 일괄 정산 | 고용주 버튼 한 번으로 직원 N명 동시 송금 |
-| PayPeriod 정산 | 월 단위 PayPeriod close, 실지급 월급 자동 계산 |
+| PayPeriod 정산 | 이체 성공 시 해당 PayPeriod 마감, 실지급 월급 자동 계산 |
 | 고용 이력 타임라인 | WorkSession·EWA·PayPeriod 이벤트를 커서 기반 조회 |
 
 ---
@@ -101,8 +101,16 @@ Employer (고용주)
 ### 동시성
 
 - **Idempotency Key**: 네트워크 재시도로 인한 중복 요청 방지
-- **Redisson 분산 락**: 동일 워커의 동시 선지급 요청을 서버 인스턴스 간에 차단
-- **DB 비관적 락**: EWA 요청과 BulkSettlement 정산 간 PayPeriod 동시 수정 방지
+- **DB 비관적 락**: 지키려는 불변식이 어디에 기록되는지에 따라 잠글 행이 갈린다. PayPeriod를 항상 마지막에 잡아 획득 순서를 고정하고, 여러 행을 잠글 때는 `ORDER BY`로 순서를 못박아 데드락을 막는다.
+
+  | 기준 행 | 잠그는 흐름 | 지키는 것 |
+  |---|---|---|
+  | Employment | `clockIn`, `createBulkSettlement` | 출근과 정산 진입의 직렬화. WorkSession·PayPeriod는 아직 없을 수 있어 잠글 행이 없으므로, 두 흐름에 반드시 존재하는 Employment를 기준점으로 삼는다 |
+  | PayPeriod | EWA 요청·거절, `clockOut`, 이체 실패 확정 | 금액 누계(`totalEarnedAmount`·`totalEwaAmount`). 넷 다 읽고-고쳐-쓰기라 락 없이 겹치면 나중에 커밋한 쪽이 앞선 변경을 덮어쓴다 |
+  | BulkSettlement | `claimForTransfer` | 이체 선점. 상태 확인과 전이 사이에 다른 진입점이 끼어드는 것을 막는다 |
+
+- **상태로 막는 구간**: 락은 트랜잭션이 끝나면 풀리므로, 그보다 긴 구간은 상태로 덮는다. 정산은 사장 입금을 기다리느라 시작과 마감 사이가 수 분~수 시간 열려 있어 `PayPeriod.SETTLING`으로 잠그고, 이체는 최대 30초씩 걸리는 외부 호출이라 `BulkSettlement.TRANSFERRING`으로 선점한다.
+- **단일 인스턴스 전제**: 스케줄러 5개에 분산 락이 없다. 앱 인스턴스를 둘 이상으로 늘리면 같은 아웃박스 이벤트를 동시에 집어 이중 송금이 발생하므로, 스케일아웃 시 Redis `SETNX`나 ShedLock 도입이 선행되어야 한다.
 
 ### 외부 API
 
@@ -157,7 +165,7 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **선지급 한도** | EWA 요청할 때마다 | `(totalEarnedAmount + PAUSED 세션 적립액) × 30% - totalEwaAmount` |
 | **totalEwaAmount** | EWA 요청 시 증가 | `+ requestedAmount` |
 | **totalEwaAmount** | EWA 거절 / 이체 실패 시 감소 | `- requestedAmount` |
-| **실제 지급 월급** | 월급 정산 시 (PayPeriod close) | `확정 번 돈 - totalEwaAmount` |
+| **실제 지급 월급** | 일괄 정산 요청 시 확정 | `확정 번 돈 - totalEwaAmount` |
 | **EWA 펌뱅킹 이체** | 고용주 승인(initiateEwa) 즉시 | Mock 펌뱅킹 API 호출, 결과에 따라 상태 전이 |
 
 ---
@@ -172,7 +180,6 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 | **ORM** | Spring Data JPA (Hibernate) |
 | **인증** | JWT |
 | **결제** | PortOne V2 (가상계좌 실연동) + Mock 송금 |
-| **분산 락** | Redis (Redisson) |
 | **인프라** | Docker, docker-compose, AWS EC2, Nginx |
 | **CI/CD** | GitHub Actions (CI: 테스트/빌드, CD: GHCR 푸시 + EC2 자동 배포) |
 | **빌드** | Gradle |
@@ -200,13 +207,13 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 3: JWT 인증 (회원가입 / 로그인)
 ✅ Phase 4: 근무 세션 API (출근 / 퇴근 / 일시정지 / 재개 / 급여 계산)
 ✅ Phase 5: 선지급 API (멱등성)
-✅ Phase 5.5: Redis 연동 (분산 락)
+✅ Phase 5.5: Redis 연동 (토큰 블랙리스트)
 ✅ Phase 6: PG 인터페이스 설계
 ✅ Phase 7: Payment History 설계
 ✅ Phase 8: PortOne 가상계좌 연동 (발급 + 웹훅 수신)
 ✅ Phase 9: EwaTransaction 거래 내역 기록
 ✅ Phase 10: Outbox 패턴 (장애복구 - Scheduler 기반)
-✅ Phase 11: 정산 API (PayPeriod close + 실지급 월급 계산 + 새 PayPeriod 생성)
+✅ Phase 11: 정산 API (PayPeriod 마감 + 실지급 월급 계산)
 ✅ Phase 12: 고용주 대시보드 + PayPeriod 요약 + 고용 이력 타임라인 (JdbcTemplate)
 ✅ Phase 13: 일괄 정산 (Mock 헥토파이낸셜 펌뱅킹 병렬 처리 + Outbox 재시도)
 ✅ Phase 14: EWA 리팩토링 (PortOne 가상계좌 제거 → 직접 펌뱅킹 이체 + VTIM/UNKNOWN 상태 관리 + RETRYING 분리 + Outbox 재이체)
@@ -221,10 +228,57 @@ Worker는 여러 사업장에 동시 고용 가능 (Employment로 관리)
 ✅ Phase 23: history cursor 기반 조회 구현
 ✅ Phase 24: AWS EC2 배포 (docker-compose, GitHub Actions CD, GHCR)
 ✅ Phase 25: Nginx 리버스 프록시 (80포트, 스프링 앱 외부 직접 노출 제거)
+✅ Phase 25.5: 정합성 보강 (금액 계상 규칙 통일, 세션 상태 가드, 웹훅 재조회 검증, 이체 선점, 마감 경로 단일화 + SETTLING 잠금, PayPeriod 금액 갱신 락)
 ⬜ Phase 26: React + TypeScript 프론트엔드 (핵심 플로우 동작 중심)
 ```
 
 </details>
+
+---
+
+## 구현 범위
+
+실서비스가 아니므로 일부는 의도적으로 범위에서 제외했다.
+"몰라서 안 한 것"과 구분하기 위해, 제외한 이유와 실제로 붙일 때 손댈 지점을 함께 남긴다.
+코드에는 해당 위치마다 `todo` 주석이 있다.
+
+### 실패 알림
+
+이체가 확정 실패해도 알림을 보내지 않는다. 상태 전이와 로그만 남아 근로자도 운영자도 모른다.
+확정 실패는 두 경로에서 발생한다.
+
+- **즉시 실패** — `classify()`가 `FAILURE`로 분기하는 지점
+  (`EwaTransferService`, `BulkSettlementService`, 두 OutBoxProcessor의 `applyResult`)
+- **재시도 소진** — 아웃박스 `MAX_RETRY`(5) 초과로 `FAILED` 전이하는 지점
+  (두 OutBoxProcessor의 `handleRetryOrFail` / `handlePrepareRetryOrFail`)
+
+### 펌뱅킹 실연동
+
+헥토파이낸셜 송금은 Mock이다 (`hectofinancial.mock=true` → `MockWageTransferAdapter`).
+실연동 시 `FirmBankingService`의 HTTP 스텁을 TCP 소켓 전문 처리로 교체해야 한다.
+
+- 2000/100 (타행이체), 7000/100 (이체결과조회)
+- 3000/100 (타행이체불능통지) — 현재는 `MockFirmBankingSocketListener`가 HTTP로 대체 수신 중.
+  실연동 시 소켓 수신 + 응답전문 회신 필요
+
+PortOne 가상계좌는 실연동 상태다 (테스트 상점).
+
+### 정산 명세서
+
+백엔드 API는 구현했고 프론트엔드 화면은 만들지 않았다. 실서비스라면 다음이 더 필요하다.
+
+- 원천징수·4대보험 공제 내역, 연장/야간 가산수당 등 법정 항목
+- 명세서 PDF 출력 및 발급 이력 보관 (근로기준법상 임금명세서 교부 의무)
+- 정산 확정 시점 스냅샷 저장 (현재는 조회할 때마다 계산)
+
+### EWA 거절/실패 사유
+
+상태값(`REJECTED`/`FAILED`)만 저장하고 사유는 남기지 않는다. 근로자가 왜 거절·실패했는지
+알 수 없으므로 실서비스라면 필요하다. `EwaRequest`에 사유 필드를 추가한 뒤,
+
+- **거절** — `EwaRequestProcessor.validateAndRejectEwa()`가 사유를 받지 않으므로 입력 경로 추가
+- **실패** — 사유가 `WageTransferResult.failureReason`에 담겨 오지만 아웃박스 프로세서가
+  `classify()` 결과만 보고 상태 전이를 호출해 유실된다. 전달 경로를 이어야 한다.
 
 ---
 

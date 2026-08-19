@@ -41,12 +41,14 @@ public class GlobalExceptionHandler {
     }
     @ExceptionHandler(ExternalApiException.class)
     public ResponseEntity<ErrorResponse> handleExternalApi(ExternalApiException e) {
-        return ResponseEntity.internalServerError().body(new ErrorResponse(502, e.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ErrorResponse(502, e.getMessage()));
     }
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntime(RuntimeException e) {
+        // 예외 메시지에 내부 정보(SQL 오류 등)가 담길 수 있으므로 로그에만 남기고 클라이언트에는 고정 문구를 준다
         log.error("Unhandled exception", e);
-        return ResponseEntity.internalServerError().body(new ErrorResponse(500, e.getMessage()));
+        return ResponseEntity.internalServerError()
+                .body(new ErrorResponse(500, "Internal server error"));
     }
 }

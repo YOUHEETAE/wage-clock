@@ -29,18 +29,12 @@ class EwaTransferFailureOutBoxProcessorTest {
                 .build();
     }
 
-    EwaTransfer buildMockTransfer() {
-        EwaTransfer transfer = mock(EwaTransfer.class);
-        when(transfer.getId()).thenReturn(1L);
-        return transfer;
-    }
 
     @Test
     void applyResult_성공_completeRetry_이벤트_PROCESSED_저장() {
         EwaTransferFailureOutBoxEvent event = buildEvent();
-        EwaTransfer transfer = buildMockTransfer();
 
-        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult("TX-002", null, null), transfer, event);
+        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult("TX-002", null, null), 1L, event);
 
         verify(ewaTransferProcessor).completeRetry(1L);
         assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PROCESSED, event.getStatus());
@@ -50,9 +44,8 @@ class EwaTransferFailureOutBoxProcessorTest {
     @Test
     void applyResult_VTIM_markPendingInquiry_이벤트_PROCESSED_저장() {
         EwaTransferFailureOutBoxEvent event = buildEvent();
-        EwaTransfer transfer = buildMockTransfer();
 
-        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult(null, "TX-002", null), transfer, event);
+        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult(null, "TX-002", null), 1L, event);
 
         verify(ewaTransferProcessor).markPendingInquiry(1L);
         assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.PROCESSED, event.getStatus());
@@ -62,9 +55,8 @@ class EwaTransferFailureOutBoxProcessorTest {
     @Test
     void applyResult_확정실패_failRetry_이벤트_FAILED_저장() {
         EwaTransferFailureOutBoxEvent event = buildEvent();
-        EwaTransfer transfer = buildMockTransfer();
 
-        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, "계좌 없음"), transfer, event);
+        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, "계좌 없음"), 1L, event);
 
         verify(ewaTransferProcessor).failRetry(1L);
         assertEquals(EwaTransferFailureOutBoxEvent.EwaTransferFailureOutBoxStatus.FAILED, event.getStatus());
@@ -74,9 +66,8 @@ class EwaTransferFailureOutBoxProcessorTest {
     @Test
     void applyResult_UNKNOWN_retryCount증가_unKnownRetry_저장() {
         EwaTransferFailureOutBoxEvent event = buildEvent();
-        EwaTransfer transfer = buildMockTransfer();
 
-        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, null), transfer, event);
+        ewaTransferFailureOutBoxProcessor.applyResult(new WageTransferResult(null, null, null), 1L, event);
 
         assertEquals(1, event.getRetryCount());
         verify(ewaTransferProcessor).unKnownRetry(1L);

@@ -1,5 +1,6 @@
 package com.wageclock.wageclock.domain.ewarequest;
 
+import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -7,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -14,7 +16,26 @@ public interface EwaRequestRepository extends JpaRepository<EwaRequest, Long> {
 
     boolean existsByIdempotencyKey(String idempotencyKey);
 
+    boolean existsByPayPeriodAndStatusIn(PayPeriod payPeriod, List<EwaRequest.EwaRequestStatus> statuses);
+
+    boolean existsByPayPeriodAndStatusNotIn(PayPeriod payPeriod, List<EwaRequest.EwaRequestStatus> statuses);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM EwaRequest e WHERE e.id = :id")
     Optional<EwaRequest> findByIdWithLock(@Param("id") Long id);
+
+    @Query("SELECT new com.wageclock.wageclock.domain.ewarequest.PendingEwaResponse(e.id, em.id, w.name, e.requestedAmount, e.createdAt) " +
+            "FROM EwaRequest e " +
+            "JOIN e.payPeriod pp " +
+            "JOIN pp.employment em " +
+            "JOIN em.worker w " +
+            "WHERE em.workplace.id = :workplaceId AND em.employer.id = :employerId AND e.status = 'PENDING'")
+    List<PendingEwaResponse> findPendingByWorkplace(@Param("workplaceId") Long workplaceId, @Param("employerId") Long employerId);
+
+    @Query("SELECT new com.wageclock.wageclock.domain.ewarequest.EwaRequestDetailResponse(e.id, e.requestedAmount, e.status, e.createdAt, e.updatedAt) " +
+            "FROM EwaRequest e " +
+            "JOIN e.payPeriod pp " +
+            "WHERE pp.employment.id = :employmentId AND pp.employment.worker.id = :workerId AND pp.status IN ('ACTIVE', 'SETTLING')")
+    List<EwaRequestDetailResponse> findDetailsByEmploymentId(@Param("employmentId") Long employmentId, @Param("workerId") Long workerId);
+
 }

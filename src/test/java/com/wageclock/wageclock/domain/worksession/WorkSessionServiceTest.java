@@ -43,14 +43,14 @@ public class WorkSessionServiceTest {
 
     @Test
     void clockIn_employment_없음_예외() {
-        when(employmentRepository.findById(1L)).thenReturn(Optional.empty());
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.empty());
         assertThrows(NotFoundException.class,
                 () -> workSessionService.clockIn(new ClockInRequest(1L), 1L));
     }
 
     @Test
     void clockIn_다른_워커_접근_예외() {
-        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(2L);
         assertThrows(UnauthorizedException.class,
                 () -> workSessionService.clockIn(new ClockInRequest(1L), 1L));
@@ -58,9 +58,9 @@ public class WorkSessionServiceTest {
 
     @Test
     void clockIn_중복_세션_예외() {
-        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.WORKING)).thenReturn(true);
+        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(true);
         assertThrows(DuplicateException.class,
                 () -> workSessionService.clockIn(new ClockInRequest(1L), 1L));
     }
@@ -68,10 +68,10 @@ public class WorkSessionServiceTest {
     @Test
     void clockIn_정상_응답_반환() {
         LocalDateTime now = LocalDateTime.now();
-        when(payPeriodRepository.findByEmployment_IdAndStatus(any(), any())).thenReturn(Optional.of(payPeriod));
-        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(any(), any())).thenReturn(Optional.of(payPeriod));
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.WORKING)).thenReturn(false);
+        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(false);
         when(workSessionRepository.save(any())).thenReturn(savedWorkSession);
         when(savedWorkSession.getId()).thenReturn(10L);
         when(savedWorkSession.getClockIn()).thenReturn(now);
@@ -82,6 +82,23 @@ public class WorkSessionServiceTest {
         assertEquals(10L, response.sessionId());
         assertEquals(now, response.clockIn());
         assertEquals(0, response.hourlyWage().compareTo(java.math.BigDecimal.valueOf(10000)));
+    }
+
+    // 정산 중에 출근하면 세션이 SETTLING인 PayPeriod에 붙고, 마감 후 퇴근한 적립액이 고아가 된다
+    @Test
+    void clockIn_정산_진행중이면_예외() {
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
+        when(employment.getWorkerId()).thenReturn(1L);
+        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L,
+                WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(false);
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(any(), any())).thenReturn(Optional.of(payPeriod));
+        when(payPeriod.getStatus()).thenReturn(PayPeriod.PayPeriodStatus.SETTLING);
+
+        assertThrows(IllegalStateException.class,
+                () -> workSessionService.clockIn(new ClockInRequest(1L), 1L));
+
+        verify(workSessionRepository, never()).save(any());
+        verify(payPeriodRepository, never()).save(any());
     }
 
     @Test
@@ -102,7 +119,8 @@ public class WorkSessionServiceTest {
     @Test
     void clockOut_정상_응답_반환() {
         LocalDateTime clockOutTime = LocalDateTime.now();
-        when(savedWorkSession.getPayPeriod()).thenReturn(payPeriod);
+        when(savedWorkSession.getPayPeriodId()).thenReturn(10L);
+        when(payPeriodRepository.findByIdWithLock(10L)).thenReturn(Optional.of(payPeriod));
         when(workSessionRepository.findById(1L)).thenReturn(Optional.of(savedWorkSession));
         when(savedWorkSession.getWorkerId()).thenReturn(1L);
         when(savedWorkSession.getClockOut()).thenReturn(clockOutTime);
@@ -115,10 +133,10 @@ public class WorkSessionServiceTest {
     }
     @Test
     void clockIn_PayPeriod_없으면_새로_생성() {
-        when(employmentRepository.findById(1L)).thenReturn(Optional.of(employment));
+        when(employmentRepository.findByIdWithLock(1L)).thenReturn(Optional.of(employment));
         when(employment.getWorkerId()).thenReturn(1L);
-        when(workSessionRepository.existsByEmploymentIdAndStatus(1L, WorkSession.WorkSessionStatus.WORKING)).thenReturn(false);
-        when(payPeriodRepository.findByEmployment_IdAndStatus(any(), any())).thenReturn(Optional.empty());
+        when(workSessionRepository.existsByEmploymentIdAndStatusNot(1L, WorkSession.WorkSessionStatus.COMPLETED)).thenReturn(false);
+        when(payPeriodRepository.findByEmployment_IdAndStatusIn(any(), any())).thenReturn(Optional.empty());
         when(payPeriodRepository.save(any())).thenReturn(payPeriod);
         when(workSessionRepository.save(any())).thenReturn(savedWorkSession);
         when(savedWorkSession.getId()).thenReturn(10L);
@@ -132,7 +150,8 @@ public class WorkSessionServiceTest {
     void clockOut_PayPeriod_earnedAmount_업데이트() {
         when(workSessionRepository.findById(1L)).thenReturn(Optional.of(savedWorkSession));
         when(savedWorkSession.getWorkerId()).thenReturn(1L);
-        when(savedWorkSession.getPayPeriod()).thenReturn(payPeriod);
+        when(savedWorkSession.getPayPeriodId()).thenReturn(10L);
+        when(payPeriodRepository.findByIdWithLock(10L)).thenReturn(Optional.of(payPeriod));
         when(savedWorkSession.getEarnedAmount()).thenReturn(BigDecimal.valueOf(50000));
 
         workSessionService.clockOut(new ClockOutRequest(1L), 1L);

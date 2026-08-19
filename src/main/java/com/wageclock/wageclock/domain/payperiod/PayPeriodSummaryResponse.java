@@ -8,5 +8,6 @@ import java.time.LocalDate;
 public record PayPeriodSummaryResponse (Long employmentId, String workerName,
                                         LocalDate periodStart, BigDecimal totalEarnedAmount,
                                         BigDecimal totalEwaAmount, BigDecimal remainingEwaLimit,
-                                        WorkSession.WorkSessionStatus activeSessionStatus){
+                                        WorkSession.WorkSessionStatus activeSessionStatus,
+                                        PayPeriod.PayPeriodStatus payPeriodStatus){
 }

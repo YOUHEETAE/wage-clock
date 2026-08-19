@@ -1,6 +1,5 @@
 package com.wageclock.wageclock.domain.outbox;
 
-import com.wageclock.wageclock.domain.ewatransfer.EwaTransfer;
 import com.wageclock.wageclock.domain.ewatransfer.EwaTransferProcessor;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
 import org.springframework.stereotype.Component;
@@ -41,24 +40,25 @@ public class EwaTransferFailureOutBoxProcessor {
     }
 
     @Transactional
-    public void applyResult(WageTransferResult result, EwaTransfer ewaTransfer, EwaTransferFailureOutBoxEvent event) {
+    public void applyResult(WageTransferResult result, Long ewaTransferId, EwaTransferFailureOutBoxEvent event) {
         switch (result.classify()) {
             case SUCCESS -> {
-                ewaTransferProcessor.completeRetry(ewaTransfer.getId());
+                ewaTransferProcessor.completeRetry(ewaTransferId);
                 event.processed();
                 ewaTransferFailureOutBoxRepository.save(event);
             }
             case PENDING_INQUIRY -> {
-                ewaTransferProcessor.markPendingInquiry(ewaTransfer.getId());
+                ewaTransferProcessor.markPendingInquiry(ewaTransferId);
                 event.processed();
                 ewaTransferFailureOutBoxRepository.save(event);
             }
             case FAILURE -> {
-                ewaTransferProcessor.failRetry(ewaTransfer.getId());
+                //todo : 확정 실패시 알림 발송 필요
+                ewaTransferProcessor.failRetry(ewaTransferId);
                 event.failed();
                 ewaTransferFailureOutBoxRepository.save(event);
             }
-            case UNKNOWN -> handleRetryOrFail(event, ewaTransfer.getId());
+            case UNKNOWN -> handleRetryOrFail(event, ewaTransferId);
         }
     }
 }

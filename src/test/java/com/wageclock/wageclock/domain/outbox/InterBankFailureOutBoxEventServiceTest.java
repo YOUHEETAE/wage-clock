@@ -1,9 +1,11 @@
 package com.wageclock.wageclock.domain.outbox;
 
+import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.TransferType;
 import com.wageclock.wageclock.domain.port.WageTransferPort;
 import com.wageclock.wageclock.domain.port.WageTransferResult;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementItem;
+import com.wageclock.wageclock.domain.settlement.BulkSettlementItemRetryContext;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementItemRepository;
 import com.wageclock.wageclock.domain.settlement.BulkSettlementProcessor;
 import com.wageclock.wageclock.domain.worker.Worker;
@@ -22,6 +24,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class InterBankFailureOutBoxEventServiceTest {
 
+    private static final TransferAccount REGISTERED_ACCOUNT =
+            new TransferAccount("004", "1234-5678", "박사원");
+
+
     @Mock WageTransferPort wageTransferPort;
     @Mock BulkSettlementItemRepository bulkSettlementItemRepository;
     @Mock BulkSettlementProcessor bulkSettlementProcessor;
@@ -37,120 +43,109 @@ class InterBankFailureOutBoxEventServiceTest {
                 .build();
     }
 
-    BulkSettlementItem buildItemForRetry() {
-        BulkSettlementItem item = mock(BulkSettlementItem.class);
-        when(item.getStatus()).thenReturn(BulkSettlementItem.BulkSettlementItemStatus.RETRYING);
-        when(item.getId()).thenReturn(10L);
-        when(item.getWorker()).thenReturn(mock(Worker.class));
-        when(item.getAmount()).thenReturn(BigDecimal.valueOf(50000));
-        return item;
+    BulkSettlementItemRetryContext retryContext() {
+        return new BulkSettlementItemRetryContext(10L, BulkSettlementItem.BulkSettlementItemStatus.RETRYING,
+                BigDecimal.valueOf(50000), "TX-001", REGISTERED_ACCOUNT);
     }
 
-    BulkSettlementItem buildItemForInquiry(BulkSettlementItem.BulkSettlementItemStatus status) {
-        BulkSettlementItem item = mock(BulkSettlementItem.class);
-        when(item.getStatus()).thenReturn(status);
-        when(item.getMessageNo()).thenReturn("TX-001");
-        return item;
+    BulkSettlementItemRetryContext inquiryContext(BulkSettlementItem.BulkSettlementItemStatus status) {
+        return new BulkSettlementItemRetryContext(10L, status,
+                BigDecimal.valueOf(50000), "TX-001", REGISTERED_ACCOUNT);
     }
+
 
     @Test
     void processEvent_첫시도_성공_applyResult_호출() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildItemForRetry();
         WageTransferResult result = new WageTransferResult("TX-002", null, null);
-        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(bulkSettlementProcessor.loadRetryContext(10L)).thenReturn(retryContext());
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-002");
         when(wageTransferPort.transfer(any(), any(), eq("TX-002"))).thenReturn(result);
 
         interBankFailureOutBoxEventService.processEvent(event);
 
         verify(bulkSettlementProcessor).assignMessageNo(10L, "TX-002");
-        verify(interBankFailureOutBoxProcessor).applyResult(result, event, item);
+        verify(interBankFailureOutBoxProcessor).applyResult(result, event, 10L);
     }
 
     @Test
     void processEvent_첫시도_VTIM_applyResult_호출() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildItemForRetry();
         WageTransferResult result = new WageTransferResult(null, "TX-002", null);
-        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(bulkSettlementProcessor.loadRetryContext(10L)).thenReturn(retryContext());
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-002");
         when(wageTransferPort.transfer(any(), any(), eq("TX-002"))).thenReturn(result);
 
         interBankFailureOutBoxEventService.processEvent(event);
 
-        verify(interBankFailureOutBoxProcessor).applyResult(result, event, item);
+        verify(interBankFailureOutBoxProcessor).applyResult(result, event, 10L);
     }
 
     @Test
     void processEvent_PENDING_INQUIRY_상태에서_inquireTransfer_applyResult_호출() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildItemForInquiry(BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY);
         WageTransferResult result = new WageTransferResult("TX-002", null, null);
-        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(bulkSettlementProcessor.loadRetryContext(10L))
+                .thenReturn(inquiryContext(BulkSettlementItem.BulkSettlementItemStatus.PENDING_INQUIRY));
         when(wageTransferPort.inquireTransfer("TX-001")).thenReturn(result);
 
         interBankFailureOutBoxEventService.processEvent(event);
 
         verify(wageTransferPort, never()).prepareTransfer(any());
         verify(wageTransferPort).inquireTransfer("TX-001");
-        verify(interBankFailureOutBoxProcessor).applyResult(result, event, item);
+        verify(interBankFailureOutBoxProcessor).applyResult(result, event, 10L);
     }
 
     @Test
     void processEvent_UNKNOWN_상태에서_inquireTransfer_applyResult_호출() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildItemForInquiry(BulkSettlementItem.BulkSettlementItemStatus.UNKNOWN);
         WageTransferResult result = new WageTransferResult("TX-002", null, null);
-        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(bulkSettlementProcessor.loadRetryContext(10L))
+                .thenReturn(inquiryContext(BulkSettlementItem.BulkSettlementItemStatus.UNKNOWN));
         when(wageTransferPort.inquireTransfer("TX-001")).thenReturn(result);
 
         interBankFailureOutBoxEventService.processEvent(event);
 
         verify(wageTransferPort, never()).prepareTransfer(any());
         verify(wageTransferPort).inquireTransfer("TX-001");
-        verify(interBankFailureOutBoxProcessor).applyResult(result, event, item);
+        verify(interBankFailureOutBoxProcessor).applyResult(result, event, 10L);
     }
 
     @Test
     void processEvent_확정실패_applyResult_호출() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildItemForRetry();
         WageTransferResult result = new WageTransferResult(null, null, "계좌 없음");
-        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(bulkSettlementProcessor.loadRetryContext(10L)).thenReturn(retryContext());
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-002");
         when(wageTransferPort.transfer(any(), any(), eq("TX-002"))).thenReturn(result);
 
         interBankFailureOutBoxEventService.processEvent(event);
 
-        verify(interBankFailureOutBoxProcessor).applyResult(result, event, item);
+        verify(interBankFailureOutBoxProcessor).applyResult(result, event, 10L);
     }
 
     @Test
     void processEvent_이체_예외발생_handleRetryOrFail_호출() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = buildItemForRetry();
-        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(bulkSettlementProcessor.loadRetryContext(10L)).thenReturn(retryContext());
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenReturn("TX-002");
         when(wageTransferPort.transfer(any(), any(), any())).thenThrow(new RuntimeException("네트워크 오류"));
 
         interBankFailureOutBoxEventService.processEvent(event);
 
-        verify(interBankFailureOutBoxProcessor).handleRetryOrFail(event, item);
+        verify(interBankFailureOutBoxProcessor).handleRetryOrFail(event, 10L);
         verify(interBankFailureOutBoxProcessor, never()).applyResult(any(), any(), any());
     }
 
     @Test
     void processEvent_messageNo발급실패_handlePrepareRetryOrFail_호출() {
         InterBankFailureOutBoxEvent event = buildEvent();
-        BulkSettlementItem item = mock(BulkSettlementItem.class);
-        when(item.getStatus()).thenReturn(BulkSettlementItem.BulkSettlementItemStatus.RETRYING);
-        when(bulkSettlementItemRepository.findByIdWithEmployment(10L)).thenReturn(Optional.of(item));
+        when(bulkSettlementProcessor.loadRetryContext(10L)).thenReturn(retryContext());
         when(wageTransferPort.prepareTransfer(TransferType.BULK_SETTLEMENT)).thenThrow(new RuntimeException("Redis 장애"));
 
         interBankFailureOutBoxEventService.processEvent(event);
 
-        verify(interBankFailureOutBoxProcessor).handlePrepareRetryOrFail(event, item);
+        verify(interBankFailureOutBoxProcessor).handlePrepareRetryOrFail(event, 10L);
         verify(wageTransferPort, never()).transfer(any(), any(), any());
         verify(interBankFailureOutBoxProcessor, never()).handleRetryOrFail(any(), any());
     }
