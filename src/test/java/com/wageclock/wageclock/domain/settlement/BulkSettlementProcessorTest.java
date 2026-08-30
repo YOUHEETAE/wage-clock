@@ -106,6 +106,45 @@ class BulkSettlementProcessorTest {
         verify(bulkSettlementRepository, never()).save(any());
     }
 
+    // payPeriods 전체를 받는 검증이라 루프 안에서 부르면 인원수만큼 조회가 나간다
+    @Test
+    void createBulkSettlement_계좌검증은_한_번만_호출된다() {
+        PayPeriod payPeriod1 = mock(PayPeriod.class);
+        PayPeriod payPeriod2 = mock(PayPeriod.class);
+        when(payPeriod1.getId()).thenReturn(1L);
+        when(payPeriod2.getId()).thenReturn(2L);
+        when(payPeriod1.getActualPayAmount()).thenReturn(BigDecimal.valueOf(50000));
+        when(payPeriod2.getActualPayAmount()).thenReturn(BigDecimal.valueOf(30000));
+        when(payPeriod1.getEmployerName()).thenReturn("테스트사업장");
+        when(payPeriodRepository.findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(anyList(), anyLong()))
+                .thenReturn(List.of(payPeriod1, payPeriod2));
+        when(bulkSettlementItemRepository.existsByPayPeriod_IdAndBulkSettlement_StatusNotIn(anyLong(), anyList()))
+                .thenReturn(false);
+
+        bulkSettlementProcessor.createBulkSettlement(List.of(1L, 2L), 1L);
+
+        verify(payPeriodSettlementValidator, times(1))
+                .validateAccounts(List.of(payPeriod1, payPeriod2));
+    }
+
+    // 한 명이라도 계좌가 없으면 전원을 막는다 — 일부만 이체하면 승인 금액과 어긋난다
+    @Test
+    void createBulkSettlement_계좌검증_실패_전원_전이안됨() {
+        PayPeriod payPeriod1 = mock(PayPeriod.class);
+        PayPeriod payPeriod2 = mock(PayPeriod.class);
+        when(payPeriodRepository.findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(anyList(), anyLong()))
+                .thenReturn(List.of(payPeriod1, payPeriod2));
+        doThrow(new IllegalStateException("김철수 님의 계좌가 등록되지 않았습니다"))
+                .when(payPeriodSettlementValidator).validateAccounts(anyList());
+
+        assertThrows(IllegalStateException.class,
+                () -> bulkSettlementProcessor.createBulkSettlement(List.of(1L, 2L), 1L));
+
+        verify(payPeriod1, never()).startSettling();
+        verify(payPeriod2, never()).startSettling();
+        verify(bulkSettlementRepository, never()).save(any());
+    }
+
     @Test
     void createBulkSettlement_인원불일치_UnauthorizedException() {
         when(payPeriodRepository.findAllByEmploymentIdInAndEmployerIdAndStatusWithLock(anyList(), anyLong()))
