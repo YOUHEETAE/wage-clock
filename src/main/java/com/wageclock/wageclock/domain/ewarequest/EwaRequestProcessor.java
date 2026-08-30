@@ -35,6 +35,9 @@ public class EwaRequestProcessor {
         if (!payPeriod.getWorkerId().equals(workerId)) {
             throw new UnauthorizedException("Invalid worker Id");
         }
+        if (!payPeriod.hasRegisteredAccount()) {
+            throw new IllegalStateException("계좌 정보를 먼저 등록해주세요");
+        }
         BigDecimal currentEarned = workSessionRepository
                 .findByEmploymentIdAndStatusNot(ewaRequestDto.employmentId(), WorkSession.WorkSessionStatus.COMPLETED)
                 .map(WorkSession::getCurrentEarnedAmount)

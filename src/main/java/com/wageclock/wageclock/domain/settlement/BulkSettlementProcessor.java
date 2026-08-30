@@ -8,7 +8,6 @@ import com.wageclock.wageclock.domain.outbox.InterBankFailureOutBoxEventReposito
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodSettlementValidator;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
-import com.wageclock.wageclock.domain.port.TransferAccount;
 import com.wageclock.wageclock.domain.port.VirtualAccountResult;
 import com.wageclock.wageclock.global.exception.DuplicateException;
 import com.wageclock.wageclock.global.exception.NotFoundException;
@@ -57,6 +56,7 @@ public class BulkSettlementProcessor {
         if(payPeriods.size() != employmentIds.size()){
             throw  new UnauthorizedException("Unauthorized");
         }
+        payPeriodSettlementValidator.validateAccounts(payPeriods);
         payPeriods.forEach(payPeriod -> {
             if (bulkSettlementItemRepository.existsByPayPeriod_IdAndBulkSettlement_StatusNotIn(
                     payPeriod.getId(), List.of(BulkSettlement.BulkSettlementStatus.TRANSFER_FAILED,

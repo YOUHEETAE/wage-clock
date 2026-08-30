@@ -140,4 +140,9 @@ public class PayPeriod extends BaseEntity {
         this.status = PayPeriodStatus.CLOSED;
         this.periodEnd = LocalDate.now();
     }
+
+    /** 지연 로딩을 타므로 트랜잭션 안에서만 호출한다. */
+    public boolean hasRegisteredAccount() {
+        return employment.getWorker().toTransferAccount().isRegistered();
+    }
 }
