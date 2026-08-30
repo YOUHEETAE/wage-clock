@@ -3,6 +3,7 @@ package com.wageclock.wageclock.domain.ewarequest;
 import com.wageclock.wageclock.domain.employment.Employment;
 import com.wageclock.wageclock.domain.payperiod.PayPeriod;
 import com.wageclock.wageclock.domain.payperiod.PayPeriodRepository;
+import com.wageclock.wageclock.domain.worker.Worker;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import org.junit.jupiter.api.Test;
@@ -34,9 +35,33 @@ public class EwaRequestProcessorTest {
     @Mock
     WorkSessionRepository workSessionRepository;
 
+    private Worker 근로자(boolean 계좌등록) {
+        Worker worker = Worker.builder().name("김철수").email("kim@test.com").password("password").build();
+        if (계좌등록) {
+            worker.registerAccountInfo("1234-5678", "004", "김철수");
+        }
+        return worker;
+    }
+
+    // 승인까지 기다렸다가 이체 직전에 실패하는 대신 요청 시점에 끊는다
+    @Test
+    void 계좌_미등록_요청_시_예외() {
+        when(employment.getWorkerId()).thenReturn(1L);
+        when(employment.getWorker()).thenReturn(근로자(false));
+        PayPeriod payPeriod = new PayPeriod(employment);
+        when(payPeriodRepository.findByEmploymentAndStatusWithLock(
+                1L, PayPeriod.PayPeriodStatus.ACTIVE)).thenReturn(Optional.of(payPeriod));
+        EwaRequestDto ewaRequestDto = new EwaRequestDto(1L, BigDecimal.ONE, "key-1");
+
+        assertThrows(IllegalStateException.class, () -> ewaRequestProcessor.processEwaRequest(ewaRequestDto, 1L));
+
+        verify(ewaRequestRepository, never()).save(any());
+    }
+
     @Test
     void 한도_초과_요청_시_예외() {
         when(employment.getWorkerId()).thenReturn(1L);
+        when(employment.getWorker()).thenReturn(근로자(true));
         PayPeriod payPeriod = new PayPeriod(employment);
         payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
         when(payPeriodRepository.findByEmploymentAndStatusWithLock(
@@ -48,6 +73,7 @@ public class EwaRequestProcessorTest {
     @Test
     void 멱등성_키_중복_요청_예외() {
         when(employment.getWorkerId()).thenReturn(1L);
+        when(employment.getWorker()).thenReturn(근로자(true));
         PayPeriod payPeriod = new PayPeriod(employment);
         payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
         when(payPeriodRepository.findByEmploymentAndStatusWithLock(
@@ -60,6 +86,7 @@ public class EwaRequestProcessorTest {
     @Test
     void 정상_요청_시_응답_반환() {
         when(employment.getWorkerId()).thenReturn(1L);
+        when(employment.getWorker()).thenReturn(근로자(true));
         PayPeriod payPeriod = new PayPeriod(employment);
         payPeriod.addEarnedAmount(BigDecimal.valueOf(10000));
         when(payPeriodRepository.findByEmploymentAndStatusWithLock(

@@ -4,11 +4,15 @@ import com.wageclock.wageclock.domain.ewarequest.EwaRequest;
 import com.wageclock.wageclock.domain.ewarequest.EwaRequestRepository;
 import com.wageclock.wageclock.domain.ewatransfer.EwaTransfer;
 import com.wageclock.wageclock.domain.ewatransfer.EwaTransferRepository;
+import com.wageclock.wageclock.domain.worker.Worker;
+import com.wageclock.wageclock.domain.worker.WorkerRepository;
 import com.wageclock.wageclock.domain.worksession.WorkSession;
 import com.wageclock.wageclock.domain.worksession.WorkSessionRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.stream.Collectors;
+
 
 @Component
 public class PayPeriodSettlementValidator {
@@ -16,6 +20,7 @@ public class PayPeriodSettlementValidator {
     private final WorkSessionRepository workSessionRepository;
     private final EwaRequestRepository ewaRequestRepository;
     private final EwaTransferRepository ewaTransferRepository;
+    private final WorkerRepository workerRepository;
 
     // 확정된 상태만 나열하고 나머지를 미확정으로 본다.
     // 새 상태가 추가돼도 기본값이 "막는다"가 되어야 안전하다 — 돈이 걸린 판단이라
@@ -28,22 +33,36 @@ public class PayPeriodSettlementValidator {
             List.of(EwaTransfer.EwaTransferStatus.FAILED,
                     EwaTransfer.EwaTransferStatus.COMPLETED);
 
-    public PayPeriodSettlementValidator(WorkSessionRepository workSessionRepository, EwaRequestRepository ewaRequestRepository, EwaTransferRepository ewaTransferRepository) {
+    public PayPeriodSettlementValidator(WorkSessionRepository workSessionRepository, EwaRequestRepository ewaRequestRepository, EwaTransferRepository ewaTransferRepository, WorkerRepository workerRepository) {
         this.workSessionRepository = workSessionRepository;
         this.ewaRequestRepository = ewaRequestRepository;
         this.ewaTransferRepository = ewaTransferRepository;
+        this.workerRepository = workerRepository;
     }
 
     public void validate(PayPeriod payPeriod) {
-        if(workSessionRepository.existsByEmploymentIdAndStatusNot(payPeriod.getEmploymentId(),
-                WorkSession.WorkSessionStatus.COMPLETED)){
+        if (workSessionRepository.existsByEmploymentIdAndStatusNot(payPeriod.getEmploymentId(),
+                WorkSession.WorkSessionStatus.COMPLETED)) {
             throw new IllegalStateException("Working WorkSession exists");
         }
-        if(ewaRequestRepository.existsByPayPeriodAndStatusNotIn(payPeriod, SETTLED_REQUEST)){
+        if (ewaRequestRepository.existsByPayPeriodAndStatusNotIn(payPeriod, SETTLED_REQUEST)) {
             throw new IllegalStateException("Not finalized EwaRequest exists");
         }
-        if(ewaTransferRepository.existsByEwaRequest_PayPeriodAndStatusNotIn(payPeriod, SETTLED_TRANSFER)){
+        if (ewaTransferRepository.existsByEwaRequest_PayPeriodAndStatusNotIn(payPeriod, SETTLED_TRANSFER)) {
             throw new IllegalStateException("Not finalized EwaTransfer exists");
+        }
+    }
+
+    //N+1을 방지하기 위해 어카운트 검사는 분리한다
+    public void validateAccounts(List<PayPeriod> payPeriods) {
+        String unregistered = workerRepository.findAllById(payPeriods.stream().map(PayPeriod::getWorkerId).toList())
+                .stream()
+                .filter(worker -> !worker.toTransferAccount().isRegistered())
+                .map(Worker::getName)
+                .collect(Collectors.joining(", "));
+
+        if (!unregistered.isEmpty()) {
+            throw new IllegalStateException(unregistered + " 님의 계좌가 등록되지 않았습니다");
         }
     }
 }
